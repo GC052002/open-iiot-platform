@@ -1,11 +1,30 @@
 # Arquitectura — Plataforma IIoT Open Source
 
-> Documento de arquitectura y decisiones de diseño para la plataforma IIoT
-> (reemplazo Open Source de WinCC / SCADA / Ignition). Complementa el
-> `README.md`, que actúa como especificación de alto nivel.
+> Documento único de arquitectura y decisiones de diseño para la plataforma IIoT
+> (reemplazo Open Source de WinCC / SCADA / Ignition). Complementa el `README.md`
+> (especificación de alto nivel) y el `ROADMAP.md` (fases, tiempos y presupuesto).
 >
-> **Estado:** propuesta de diseño (aún sin implementación de código).
+> **Estado:** propuesta de diseño consolidada (aún sin implementación de código).
+> **Versión del documento:** consolidada (Rev 1 Claude + Rev 2 externa Gemini/GLM).
 > **Última revisión:** 2026-07-26.
+
+---
+
+## 0. Cómo leer este documento
+
+Este archivo unifica dos rondas de revisión:
+
+- **Rev 1** — arquitectura base (motor productor/consumidor, drivers, seguridad).
+- **Rev 2** — deltas externos (escalado multi-worker, ABAC, observabilidad,
+  aiomqtt, etc.), aceptados con dos matices y una estrategia de fases.
+
+Todo lo aceptado está integrado aquí como **una sola decisión**. Cada capacidad
+avanzada indica en qué **fase** entra (ver `ROADMAP.md`) para no construir todo
+de golpe.
+
+**Principio rector de alcance:** *lo mínimo que funciona en modo air-gapped
+single-worker es v1; lo que solo hace falta en cloud-native multi-planta se
+difiere a fases posteriores.*
 
 ---
 
@@ -16,7 +35,7 @@ diseño visual e interactivo (estilo Node-RED / WinCC / Ignition) para
 integración de sistemas, HMI, control y comunicación con PLCs e instrumentación
 industrial, sin licencias costosas.
 
-El sistema se divide en dos capas desacopladas:
+Dos capas desacopladas:
 
 - **Frontend** — UI + canvas interactivo (React + React Flow).
 - **Backend** — motor asíncrono de comunicaciones y tiempo real (Python 3.11+
@@ -34,138 +53,107 @@ El sistema se divide en dos capas desacopladas:
 ┌───────────────────────────────────────────▼────────────────────────────────────────────────────┐
 │                                    BACKEND (FastAPI + asyncio)                                    │
 │                                                                                                   │
-│   Drivers (productores)  ─►  TagCache (última muestra + deadband)  ─►  Broadcaster  ─► WS clients │
-│   · S7 (snap7, en hilo)          · report-by-exception                 · colas acotadas           │
-│   · Modbus (pymodbus)                                                   · suscripción por tag      │
-│   · OPC UA (asyncua, async nativo)                                                                 │
-│   · MQTT (paho, TLS)          Cola de comandos (escrituras) ◄──────────── REST / RBAC / audit      │
+│   Drivers (productores) ─► TagCache (última muestra + deadband) ─► Broadcaster local ─► WS clients│
+│   · S7 (snap7, en hilo)         │                                    ▲                             │
+│   · Modbus (pymodbus, hilo)     ├─► Motor de Alarmas (suscriptor) ─► Notificaciones (Telegram/SMTP)│
+│   · OPC UA (asyncua, nativo)    ├─► TagBuffer (suscriptor) ─► batch writes ─► TimescaleDB/SQLite   │
+│   · MQTT (aiomqtt, TLS)         └─► RedisBridge (pub/sub) ─► broadcasters de otros workers [F3]    │
 │                                                                                                   │
-│   Suscriptores del TagCache: Motor de Alarmas ─► Notificaciones (Telegram / SMTP) + Histórico     │
-│   Seguridad: RBAC · cifrado Fernet de credenciales · audit log de escrituras                      │
+│   Cola de comandos (escrituras) ◄──────── REST · RBAC(+ABAC) · audit log · patrón Command         │
+│   Seguridad: cifrado Fernet (clave externa) · Observabilidad: Prometheus /metrics + health [F2+]  │
 └───────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Principio central:** productor / consumidor totalmente desacoplado. Los drivers
-nunca hablan directamente con los WebSockets; escriben al *TagCache* y un
-*broadcaster* independiente publica a los clientes. Esto separa la cadencia de
-polling de la cadencia de render y evita que un cliente lento afecte al scan.
+**nunca** hablan directamente con los WebSockets; escriben al **TagCache** y
+varios suscriptores independientes (Broadcaster, Alarmas, TagBuffer) consumen de
+él (patrón Observer). Esto separa la cadencia de polling de la de render y evita
+que un cliente lento afecte al scan.
+
+`[F2]`, `[F3]`… indican la fase del `ROADMAP.md` en que se implementa cada pieza.
 
 ---
 
-## 3. Revisión de arquitectura: riesgos y decisiones
+## 3. Riesgos y decisiones (base — Rev 1)
 
-Ordenados por prioridad. Cada uno incluye el riesgo y la decisión de diseño
-adoptada.
+Ordenados por prioridad. Riesgo → decisión adoptada.
 
 ### 3.1 `python-snap7` bloquea el event loop — **crítico**
-
-`python-snap7` es un wrapper sobre una librería C **síncrona**. Llamarlo dentro
-de una corrutina bloquea todo el event loop de `asyncio` (todos los demás
-drivers, los WebSockets, las alarmas). Lo mismo aplica parcialmente a
-`pymodbus` según la versión.
-
-**Decisión:** todo driver bloqueante se ejecuta fuera del loop mediante
-`asyncio.to_thread` / `run_in_executor` con un `ThreadPoolExecutor` dedicado (o,
-en escenarios de alta carga, un proceso por driver). El core del motor no debe
-saber si un driver es síncrono o asíncrono nativo — se uniforma vía un *Adapter*
-detrás de la interfaz `BaseDriver`.
+Wrapper sobre librería C **síncrona**; llamarlo en una corrutina bloquea todo el
+loop (demás drivers, WebSockets, alarmas). Igual, parcialmente, para `pymodbus`.
+**Decisión:** todo driver bloqueante corre fuera del loop vía
+`asyncio.to_thread` / `run_in_executor` con `ThreadPoolExecutor` dedicado (o
+proceso por driver en alta carga). El core se uniforma con un *Adapter* detrás de
+`BaseDriver` y no sabe si el driver es síncrono o async nativo.
 
 ### 3.2 Lecturas por bloque, no por tag — **rendimiento**
-
-Un panel con cientos de tags no debe generar un request por tag. PLCs Siemens y
-Modbus rinden mucho mejor con **lecturas por bloques** (agrupar tags contiguos
-por DB / rango de memoria en una sola petición y rebanar en memoria).
-
-**Decisión:** un `ScanScheduler` agrupa tags por driver y por rango contiguo,
-minimizando round-trips. Diferencia entre ~50 ms y ~2 s de ciclo de scan.
+**Decisión:** un `ScanScheduler` agrupa tags contiguos por driver y rango (DB /
+zona de memoria) en una sola petición y rebana en memoria. Diferencia entre
+~50 ms y ~2 s de ciclo de scan.
 
 ### 3.3 Desacople polling ↔ WebSocket — **rendimiento / estabilidad**
-
-No transmitir a la UI a la velocidad del polling. Enviar todos los valores en
-cada ciclo satura el WebSocket y el render de React.
-
 **Decisión:** los drivers escriben al TagCache; un emisor independiente hace
-*push* solo con **cambios** (report-by-exception / deadband) a una cadencia
-limitada (p. ej. 5–10 Hz máximo).
+*push* solo con **cambios** (report-by-exception / deadband) a cadencia limitada
+(5–10 Hz máx).
 
 ### 3.4 Backpressure en WebSockets — **estabilidad**
-
-Un cliente lento (móvil por VPN) no debe hacer crecer una cola en memoria sin
-límite.
-
 **Decisión:** cola **acotada** por cliente (`asyncio.Queue(maxsize=N)`) con
-política de descarte del valor **más viejo** — en telemetría, el último valor es
-el que importa.
+descarte del valor **más viejo** — en telemetría, el último valor es el que
+importa.
 
 ### 3.5 Seguridad de credenciales (Fernet) — **seguridad**
-
-Cifrar con Fernet está bien, pero lo determinante es **dónde vive la clave**. Si
-la clave está junto al ciphertext, no se protege nada.
-
-**Decisión:** la clave Fernet proviene de variable de entorno / secreto externo
-/ archivo con permisos `0600` fuera del repositorio; nunca en el JSON del
-proyecto ni versionada. Contemplar rotación de clave.
+Lo determinante es **dónde vive la clave**. **Decisión:** la clave Fernet
+proviene de fuente externa (nunca del JSON ni versionada); mecanismos concretos
+por modo de red en **§10.4**. Contempla rotación.
 
 ### 3.6 RBAC real en el backend — **seguridad**
-
-Bloquear el canvas para el Operador en React es UX, no seguridad. La
-autorización real (quién escribe a un PLC, quién edita la topología) debe
-imponerse en cada endpoint del backend.
-
-**Decisión:** RBAC aplicado en el backend por endpoint. Toda **escritura** a un
-PLC se audita: quién, cuándo, valor anterior → nuevo. Escrituras vía *Command*
-con confirmación explícita.
+Bloquear el canvas en React es UX, no seguridad. **Decisión:** autorización
+impuesta en cada endpoint del backend; toda **escritura** a PLC se audita (quién,
+cuándo, valor anterior → nuevo) vía patrón *Command* con confirmación explícita.
+Extensión ABAC multi-planta en **§10.2**.
 
 ### 3.7 Esquema del JSON de proyecto versionado — **mantenibilidad**
-
-Sin versión de esquema, un proyecto guardado con una versión vieja del editor
-romperá silenciosamente al importarse.
-
 **Decisión:** `schema_version` en el JSON desde el día 1 y validación con
-**Pydantic v2** en el backend. Plan de migraciones entre versiones de esquema.
+**Pydantic v2**. Plan de migraciones entre versiones.
 
 ### 3.8 Persistencia de histórico y alarmas — **arquitectura**
-
-El README no define almacenamiento. Alarmas e histórico necesitan persistencia
-de series temporales.
-
-**Decisión:** PostgreSQL + TimescaleDB en despliegues con recursos; SQLite como
-opción para el modo air-gapped / edge. Abstraer tras un repositorio para no
-acoplar el motor a un motor de BD concreto.
+**Decisión:** PostgreSQL + **TimescaleDB** en despliegues con recursos;
+**SQLite** para air-gapped / edge. Abstraído tras un **Repository** para no
+acoplar el motor al motor de BD.
 
 ### 3.9 OPC UA y MQTT — aprovechar async nativo
-
-`asyncua` (OPC UA) y `paho`/`asyncio-mqtt` encajan de forma nativa en el loop.
-
-**Decisión:** para OPC UA usar **subscriptions** del servidor en lugar de
-polling manual; para MQTT, suscripción por tópico. Ambos publican al mismo
-TagCache que los drivers de polling.
+**Decisión:** OPC UA usa **subscriptions** del servidor (no polling manual); MQTT
+usa **aiomqtt** (async nativo, ver §11.2). Ambos publican al mismo TagCache.
 
 ---
 
-## 4. Estructura del motor (productor / TagCache / consumidor)
+## 4. Estructura del motor (productor / TagCache / consumidores)
 
 ```
-Drivers (productores) ──► TagCache (última muestra) ──► Broadcaster ──► WS (consumidores)
-   cada uno en su          + deadband /                  colas acotadas    suscritos por tag
-   propia tarea/hilo        report-by-exception           (descarte FIFO)
-        ▲                                                        │
-        └──────────────── Cola de comandos (escrituras) ◄────────┘  (REST + RBAC + audit)
+Drivers (productores) ──► TagCache (última muestra + deadband) ──┬─► Broadcaster ──► WS (consumidores)
+   cada uno en su                                                ├─► Motor de Alarmas ──► notificaciones
+   propia tarea/hilo                                             └─► TagBuffer ──► batch ──► Timescale/SQLite
+        ▲                                                              (suscriptor de persistencia, §11.1)
+        └──────────────── Cola de comandos (escrituras) ◄──────────── REST + RBAC(+ABAC) + audit
 ```
 
-- **Driver loop:** cada driver es una `asyncio.Task` independiente. Los
-  síncronos envuelven su I/O en `to_thread`. Ante caída de un PLC, esa tarea
-  reintenta con backoff **sin** afectar a los demás.
+- **Driver loop:** cada driver es una `asyncio.Task` independiente; los síncronos
+  envuelven I/O en `to_thread`. Ante caída de un PLC, reintenta con backoff **sin**
+  afectar a los demás.
 - **TagCache:** `dict[tag_id -> última muestra]`. Aplica deadband y notifica a
   suscriptores solo ante cambios significativos.
-- **ConnectionManager / Broadcaster:** `dict[tag_id -> set[cliente]]`; cada
+- **Broadcaster / ConnectionManager:** `dict[tag_id -> set[cliente]]`; cada
   cliente con `asyncio.Queue(maxsize=N)` y descarte del más viejo al llenarse.
-- **Motor de alarmas:** es *otro suscriptor* del TagCache (patrón Observer);
-  evalúa umbrales y dispara notificaciones + registro histórico.
+- **Motor de Alarmas:** suscriptor del TagCache (Observer); evalúa umbrales y
+  dispara notificaciones + registro histórico.
+- **TagBuffer:** suscriptor de persistencia; acumula muestras y hace *flush* en
+  batch (cada N s o M muestras) para no escribir 1 fila por lectura (§11.1).
 
 ---
 
 ## 5. Estructura de carpetas propuesta (backend)
+
+Las carpetas marcadas `[Fn]` se crean en esa fase; el resto es v1.
 
 ```
 backend/
@@ -173,23 +161,27 @@ backend/
     main.py                  # FastAPI app + lifespan (arranque/parada del engine)
     api/                     # REST: proyectos, auth, escrituras (Command)
     ws/
-      manager.py             # ConnectionManager + broadcaster (colas acotadas)
+      manager.py             # ConnectionManager local + broadcaster (colas acotadas)
+      broker.py              # [F3] RedisBridge (pub/sub entre workers)
+      topics.py              # [F3] índice tag_id -> set[client_id] (routing selectivo)
     engine/
       runtime.py             # orquesta workers + tag cache
       tag_cache.py           # última muestra + deadband / report-by-exception
       scan_scheduler.py      # agrupa tags en bloques por driver
     drivers/
       base.py                # BaseDriver (interfaz abstracta: connect/read/write/disconnect)
-      factory.py             # Factory + registro de drivers
-      s7_driver.py           # snap7 en thread pool (Adapter sobre lib síncrona)
-      modbus_driver.py       # pymodbus
-      opcua_driver.py        # asyncua (async nativo, subscriptions)
-      mqtt_driver.py         # paho / TLS
+      registry.py            # Factory + registro por decorador (+ entry_points en F3, §11.3)
+      modbus_driver.py       # pymodbus (driver de referencia de v1)
+      s7_driver.py           # [F2] snap7 en thread pool (Adapter sobre lib síncrona)
+      opcua_driver.py        # [F2] asyncua (async nativo, subscriptions)
+      mqtt_driver.py         # [F2] aiomqtt / TLS (flag sparkplug diseñado, impl. diferida §10.3)
     models/                  # Pydantic v2: esquema de proyecto / nodos / tags (schema_version)
-    security/                # RBAC, cifrado Fernet, audit log
-    storage/                 # repositorio de histórico/alarmas (Timescale/SQLite)
+    security/                # RBAC + Fernet + audit log (ABAC/Casbin en F3, §10.2)
+    storage/                 # Repository de histórico/alarmas (SQLite v1 / Timescale F2+)
+    observability/           # [F2] metrics.py (Prometheus) · health.py  ·  tracing.py [F3]
   tests/
 docker-compose.yml
+pyproject.toml
 ```
 
 ---
@@ -198,11 +190,11 @@ docker-compose.yml
 
 | Patrón | Aplicación |
 |---|---|
-| **Factory + Registry** | Instanciar drivers por `type` del nodo. Auto-registro por decorador (`@register_driver("modbus_tcp")`). Añadir protocolo = un archivo, sin tocar el core. |
-| **Adapter** | Uniformar drivers síncronos (snap7) y async nativos (asyncua) bajo una misma `BaseDriver`. |
-| **Strategy** | Nodos de lógica (escalado lineal, deadband, media móvil): transformaciones intercambiables aplicadas al flujo de datos. |
-| **Observer / Pub-Sub** | Desacople TagCache → alarmas / broadcaster / notificaciones. Cada consumidor es un suscriptor. |
-| **Command** | Escrituras a PLC: encapsulan la operación → habilitan audit log y confirmaciones de forma natural. |
+| **Factory + Registry** | Instanciar drivers por `type` del nodo. Auto-registro por decorador (`@register_driver("modbus_tcp")`); `entry_points` para plugins externos en F3 (§11.3). |
+| **Adapter** | Uniformar drivers síncronos (snap7) y async nativos (asyncua/aiomqtt) bajo `BaseDriver`. |
+| **Strategy** | Nodos de lógica (escalado lineal, deadband, media móvil): transformaciones intercambiables. |
+| **Observer / Pub-Sub** | TagCache → Broadcaster / Alarmas / TagBuffer. Cada consumidor es un suscriptor. |
+| **Command** | Escrituras a PLC: encapsulan la operación → audit log + confirmaciones naturales. |
 | **Repository** | Abstraer persistencia de histórico/alarmas del motor de BD concreto. |
 
 ---
@@ -211,23 +203,89 @@ docker-compose.yml
 
 | Modo | Descripción | Implicaciones técnicas |
 |---|---|---|
-| **Local aislado (air-gapped)** | 100% offline, sin CDNs externas. | Empaquetar todos los assets del frontend localmente; SQLite como opción de BD; sin dependencias de servicios externos en runtime. |
-| **Híbrido** | Operación local + exposición remota vía VPN/túnel. | Endurecer TLS y autenticación en la superficie remota; separar red OT de la exposición. |
-| **Solo nube (cloud-native)** | Servidor WAN/VPS multi-planta. | Multi-tenant; gestión de secretos centralizada; escalado horizontal del motor. |
+| **Local aislado (air-gapped)** | 100% offline, sin CDNs. | Assets del frontend empaquetados localmente; SQLite; sin servicios externos en runtime; single-worker (Redis opcional). |
+| **Híbrido** | Local + exposición remota vía VPN/túnel. | Endurecer TLS y auth en la superficie remota; separar red OT de la exposición. |
+| **Solo nube (cloud-native)** | Servidor WAN/VPS multi-planta. | Multi-tenant (ABAC); secretos centralizados (Vault); escalado horizontal (Redis Pub/Sub); observabilidad completa. |
 
 ---
 
-## 8. Próximos pasos
+## 8. Deltas aceptados de la Rev 2 (integrados)
 
-- [ ] Scaffold del backend: `BaseDriver` + `DriverFactory`, `TagCache`,
-      `ConnectionManager` con backpressure y un driver Modbus de ejemplo.
-- [ ] Definir el esquema Pydantic del JSON de proyecto (`schema_version`).
-- [ ] `docker-compose.yml` con backend + BD.
-- [ ] Motor de alarmas como suscriptor del TagCache.
-- [ ] Estrategia de gestión de la clave Fernet y almacén de certificados
-      (OPC UA X.509 / MQTT TLS).
+Extensiones sobre la base, cada una atada a su fase. La numeración conserva la de
+la revisión externa para trazabilidad.
+
+### 10.1 Escalado horizontal del Broadcaster (Redis Pub/Sub) — **crítico** `[F3]`
+El `ConnectionManager` es **local por worker**: con `uvicorn --workers N`, un
+driver del worker A no entrega updates a clientes del worker B — el broadcast se
+rompe en silencio.
+**Decisión:** `RedisBridge` (canal `tag_updates`) obligatorio en cloud-native,
+opcional en híbrido/air-gapped (1 worker basta). El TagCache sigue siendo la
+fuente de verdad intra-worker; **Redis es solo transporte** entre workers.
+**Matiz (Claude):** el *serializer* msgpack/protobuf es optimización prematura —
+**JSON en v1**; msgpack solo si el perfilado lo justifica.
+
+### 10.2 RBAC → RBAC + ABAC multi-planta — **seguridad** `[F3]`
+Por rol no basta en multi-planta: un ingeniero de Planta A no debe ver/escribir
+tags de Planta B.
+**Decisión:** modelo híbrido con **Casbin**. Roles: `admin`, `engineer`,
+`operator`, `viewer`. Atributos: `plant_id`, `zone_id`, `asset_id`, `project_id`.
+Regla: *role permite acción AND atributos coinciden con el recurso*. Handshake WS
+con JWT y validación por suscripción. En single-plant, RBAC simple basta (ABAC
+inactivo).
+
+### 10.3 Sparkplug B como modo MQTT opcional — **interoperabilidad** `[F2 diseño / F4 impl.]`
+MQTT plano no tiene *state management*. Sparkplug B añade birth/death
+certificates y namespace estándar — diferenciador frente a Node-RED.
+**Decisión (con matiz Claude):** `mqtt_driver.py` se **diseña** con flag
+`sparkplug: true|false` desde el inicio, pero la **implementación Protobuf se
+difiere** (fuera de v1). `false` → MQTT plano; `true` → payload Protobuf +
+`spBv1.0/...` + birth/death.
+
+### 10.4 Gestión concreta de la clave Fernet — **seguridad** `[F1 base / F3 Vault]`
+| Modo | Mecanismo | Justificación |
+|---|---|---|
+| Air-gapped | **SOPS + age** (clave en USB/token, montada al arrancar) | sin red externa |
+| Híbrido | Vault on-premise **o** SOPS+age | según infraestructura |
+| Cloud-native | **HashiCorp Vault** (dynamic secrets + rotación) | multi-tenant, sin downtime |
+
+La clave **nunca** se commitea ni se hornea en la imagen Docker; el contenedor la
+obtiene al arrancar. **Rotación:** re-cifrado de `devices.credentials_encrypted`;
+cloud cada 90 días, air-gapped manual con ventana.
+
+### 10.5 Observabilidad — **operaciones** `[F2 métricas/health · F3 tracing]`
+**Decisión:**
+- **Prometheus** en `/metrics`: por driver (`reads_total`, `reads_failed`,
+  `last_read_latency_ms`, `reconnect_count`) y por WS (`connected_clients`,
+  `messages_sent`, `queue_overflow_count`).
+- **Health checks** en `/health/drivers/{name}` (healthy / last_error /
+  last_check) para Docker `HEALTHCHECK` y orquestadores.
+- **OpenTelemetry** tracing (span por lectura y por mensaje WS) — diferido a F3.
+
+### 11.1 TagCache vs TagBuffer (desambiguación)
+- **TagCache:** última muestra + deadband; hot path → WebSocket.
+- **TagBuffer:** batch de muestras para escritura eficiente; hot path →
+  persistencia. Es **otro suscriptor Observer** del TagCache (ver §4).
+
+### 11.2 aiomqtt en vez de paho — **implementación**
+**Decisión:** `aiomqtt` como dependencia única del backend (async nativo, sin
+envolver callbacks en `to_thread`). `paho` directo descartado en backend.
+
+### 11.3 Plugin discovery — decorador ahora, `entry_points` después
+**Decisión:** ambos, en fases. F1–F2: `@register_driver` para built-in. F3:
+`DriverRegistry.discover()` con `entry_points` para paquetes pip externos
+(BACnet, EtherNet/IP, DNP3, Profinet) sin tocar el core.
 
 ---
 
-_Este documento es una guía viva; se irá actualizando conforme avance la
-implementación._
+## 9. Matriz de decisiones cerradas (§13 de la Rev 2)
+
+| Pregunta | Decisión |
+|---|---|
+| ¿Decorador + `entry_points` simultáneos? | **Sí**, faseado (built-in por decorador; externos por entry_points en F3). |
+| ¿Sparkplug B opcional o fuera de v1? | **Opcional**; flag diseñado desde el inicio, implementación Protobuf diferida a F4. |
+| ¿Redis obligatorio en air-gapped? | **No**; opcional single-worker en air-gapped, obligatorio en cloud-native. |
+| ¿Serializer msgpack/protobuf en WS? | **No en v1**; JSON hasta que el perfilado justifique msgpack. |
+
+---
+
+_Documento vivo. La planificación temporal y de esfuerzo vive en `ROADMAP.md`._
