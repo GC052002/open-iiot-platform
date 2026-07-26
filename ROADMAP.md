@@ -18,8 +18,9 @@ trabajo que seguimos en este proyecto:
    |---|---|---|
    | Arquitectura, decisiones críticas, revisión de seguridad | **Opus (Claude)** | razonamiento profundo, pocas llamadas |
    | Implementación de drivers/boilerplate repetitivo | **Modelo económico** (Gemini Flash / GLM / Sonnet) | patrón conocido, alto volumen |
-   | Frontend React (componentes) | **Modelo económico** | repetitivo, verificable a ojo |
-   | Tests unitarios | **Modelo económico** | plantilla + casos |
+   | Frontend React — **store global + sync WebSocket↔Canvas** | **Sonnet** (nivel intermedio) | manejo de conexiones/eventos de render tiene complejidad real (Rev 3) |
+   | Frontend React — componentes gráficos estáticos (tanques, medidores, botones) | **Modelo económico** | repetitivo, verificable a ojo |
+   | Tests unitarios (con clase+interfaz concreta) | **Modelo económico** | plantilla + casos; delegar ahorra tokens |
    | Debug puntual difícil | **Opus** solo cuando el económico se atasca | reservar potencia |
 
 2. **Cerrar el diseño ANTES de codificar.** Ya está hecho: `ARCHITECTURE.md` es
@@ -53,15 +54,17 @@ Diseño cerrado y repo listo para construir.
 - [x] `ARCHITECTURE.md` consolidado (Rev 1 + Rev 2)
 - [x] `ROADMAP.md` (este archivo)
 - [ ] `pyproject.toml` + estructura vacía de carpetas + `.pre-commit` (ruff/black)
-- [ ] `docker-compose.yml` esqueleto (solo backend + SQLite)
+- [ ] `docker-compose.yml` esqueleto (backend + SQLite + **simulador Modbus TCP**
+      —`pymodbus.server` o contenedor `diagslave`— para validar sin PLC físico, Rev 3)
 - **Modelo:** Opus (cierre de diseño). **Coste:** bajo.
 
 ### Fase 1 — Núcleo del motor (MVP ejecutable) · *~3–4 j* — **prioridad**
 El corazón: productor/TagCache/consumer con **un** driver, end-to-end.
 - [ ] `models/` — esquemas Pydantic v2 del proyecto/nodos/tags (`schema_version`)
-- [ ] `drivers/base.py` + `drivers/registry.py` (Factory + decorador)
+- [ ] `drivers/base.py` (incl. firma async `write_tag`, Rev 3) + `drivers/registry.py` (Factory + decorador)
 - [ ] `drivers/modbus_driver.py` (driver de referencia, contra simulador)
 - [ ] `engine/tag_cache.py` (deadband) + `engine/runtime.py` + `scan_scheduler.py`
+      **neutro de protocolo** (recibe lista genérica de `Tag`; el driver traduce "contiguo", Rev 3)
 - [ ] `ws/manager.py` (ConnectionManager con colas acotadas + backpressure)
 - [ ] `api/` mínimo: cargar proyecto JSON, listar tags, endpoint WS
 - [ ] Tests del TagCache, backpressure y registry

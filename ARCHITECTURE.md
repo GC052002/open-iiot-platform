@@ -90,6 +90,11 @@ proceso por driver en alta carga). El core se uniforma con un *Adapter* detrás 
 **Decisión:** un `ScanScheduler` agrupa tags contiguos por driver y rango (DB /
 zona de memoria) en una sola petición y rebana en memoria. Diferencia entre
 ~50 ms y ~2 s de ciclo de scan.
+**Neutralidad de protocolo (Rev 3):** el `ScanScheduler` **no** conoce la
+semántica de "contiguo" de ningún protocolo. Entrega al driver una lista genérica
+de `Tag` y es el `BaseDriver` (o su subclase) quien traduce qué significa
+agrupar/optimizar en su contexto — rangos de Holding Registers en Modbus, `DB` en
+S7, subárboles de nodos en OPC UA. Así F2 añade S7/OPC UA sin tocar el scheduler.
 
 ### 3.3 Desacople polling ↔ WebSocket — **rendimiento / estabilidad**
 **Decisión:** los drivers escriben al TagCache; un emisor independiente hace
@@ -111,6 +116,10 @@ Bloquear el canvas en React es UX, no seguridad. **Decisión:** autorización
 impuesta en cada endpoint del backend; toda **escritura** a PLC se audita (quién,
 cuándo, valor anterior → nuevo) vía patrón *Command* con confirmación explícita.
 Extensión ABAC multi-planta en **§10.2**.
+**Contrato de escritura desde F1 (Rev 3):** aunque F1 es principalmente lectura,
+la firma asíncrona de escritura se define en `BaseDriver` **desde la Fase 1**
+para que el flujo Command de F2 encaje sin parches:
+`async def write_tag(self, tag_id: str, value: Any) -> bool: ...`
 
 ### 3.7 Esquema del JSON de proyecto versionado — **mantenibilidad**
 **Decisión:** `schema_version` en el JSON desde el día 1 y validación con
@@ -169,7 +178,7 @@ backend/
       tag_cache.py           # última muestra + deadband / report-by-exception
       scan_scheduler.py      # agrupa tags en bloques por driver
     drivers/
-      base.py                # BaseDriver (interfaz abstracta: connect/read/write/disconnect)
+      base.py                # BaseDriver abstracto: connect / read_block / write_tag(async) / disconnect
       registry.py            # Factory + registro por decorador (+ entry_points en F3, §11.3)
       modbus_driver.py       # pymodbus (driver de referencia de v1)
       s7_driver.py           # [F2] snap7 en thread pool (Adapter sobre lib síncrona)
@@ -285,6 +294,9 @@ envolver callbacks en `to_thread`). `paho` directo descartado en backend.
 | ¿Sparkplug B opcional o fuera de v1? | **Opcional**; flag diseñado desde el inicio, implementación Protobuf diferida a F4. |
 | ¿Redis obligatorio en air-gapped? | **No**; opcional single-worker en air-gapped, obligatorio en cloud-native. |
 | ¿Serializer msgpack/protobuf en WS? | **No en v1**; JSON hasta que el perfilado justifique msgpack. |
+| ¿Firma de escritura (`write_tag`) en F1 o F2? (Rev 3) | **En F1**, en `BaseDriver`, aunque la implementación Command llegue en F2. |
+| ¿`ScanScheduler` acoplado a Modbus? (Rev 3) | **No**; scheduler neutro de protocolo, el driver traduce "contiguo" (§3.2). |
+| ¿Simulador Modbus en el repo? (Rev 3) | **Sí**; servicio en `docker-compose` desde F0/F1 para validar sin PLC físico. |
 
 ---
 
