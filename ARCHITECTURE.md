@@ -134,6 +134,33 @@ acoplar el motor al motor de BD.
 **Decisión:** OPC UA usa **subscriptions** del servidor (no polling manual); MQTT
 usa **aiomqtt** (async nativo, ver §11.2). Ambos publican al mismo TagCache.
 
+### 3.10 Endurecimiento de la Fase 1 (Rev 4) — evitar refactor del core
+Seis decisiones que deben cerrarse **dentro de F1** para no refactorizar el core
+antes del hito demostrable:
+
+- **R1 — Contrato de mensajes WS es entregable de F1.** `ws/protocol.py` con el
+  esquema Pydantic de mensajes (`tag_update`, `subscribe`, `ack`, `overflow`),
+  definido con Opus junto a `BaseDriver`. F3 (frontend) consume ese contrato
+  estable sin renegociarlo. *(Antes flotaba entre F1 y F3.)*
+- **R2 — Concurrencia estructurada en `runtime.py`.** Usar
+  **`asyncio.TaskGroup`** (Python 3.11+): un grupo por driver, cancelación en
+  cascada y *cleanup* garantizado. Nada de `create_task` sueltos (fugas de tareas
+  en fallo, shutdown sucio, caídas en reconexiones reales).
+- **R3 — Política de concurrencia del TagCache.** Múltiples writers (drivers) +
+  readers (broadcaster ya en F1). **Decisión:** *lock por tag* (granularidad
+  fina) o *copy-on-write* de la entrada; documentar la elección en
+  `tag_cache.py`. Evita datos mezclados bajo carga.
+- **R4 — Deadband en el modelo `Tag` desde F1.** `deadband: float = 0.0` y
+  `deadband_mode: Literal["abs","pct"] = "abs"`. `0.0` = reportar todo (tests).
+  Sin esto, un analógico ruidoso satura el WS al conectar el primer cliente.
+- **R5 — `schema_version` con dispatcher.** Modelar `Project` como **unión
+  discriminada** por `schema_version` desde F1, aunque solo exista `v1`. Coste
+  cero ahora, migración trivial en F2/F3.
+- **R6 — Pinear `pymodbus` y fijar el simulador.** `pymodbus>=3.6,<4` en
+  `pyproject.toml` y el simulador (`StartAsyncTcpServer`) en un **fixture de
+  pytest reutilizable**. Evita tests verdes en local y rotos en `pip install`
+  limpio.
+
 ---
 
 ## 4. Estructura del motor (productor / TagCache / consumidores)
@@ -170,6 +197,7 @@ backend/
     main.py                  # FastAPI app + lifespan (arranque/parada del engine)
     api/                     # REST: proyectos, auth, escrituras (Command)
     ws/
+      protocol.py            # [F1, Rev 4] esquema Pydantic de mensajes WS (tag_update/subscribe/ack/overflow)
       manager.py             # ConnectionManager local + broadcaster (colas acotadas)
       broker.py              # [F3] RedisBridge (pub/sub entre workers)
       topics.py              # [F3] índice tag_id -> set[client_id] (routing selectivo)
@@ -297,6 +325,12 @@ envolver callbacks en `to_thread`). `paho` directo descartado en backend.
 | ¿Firma de escritura (`write_tag`) en F1 o F2? (Rev 3) | **En F1**, en `BaseDriver`, aunque la implementación Command llegue en F2. |
 | ¿`ScanScheduler` acoplado a Modbus? (Rev 3) | **No**; scheduler neutro de protocolo, el driver traduce "contiguo" (§3.2). |
 | ¿Simulador Modbus en el repo? (Rev 3) | **Sí**; servicio en `docker-compose` desde F0/F1 para validar sin PLC físico. |
+| ¿Contrato de mensajes WS, en qué fase? (Rev 4 · R1) | **F1**, en `ws/protocol.py`, definido con Opus. F3 lo consume sin renegociar. |
+| ¿Concurrencia del `runtime.py`? (Rev 4 · R2) | **`asyncio.TaskGroup`** (grupo por driver, cleanup garantizado). |
+| ¿Locking del TagCache? (Rev 4 · R3) | Lock por tag (fino) o copy-on-write; decisión documentada en `tag_cache.py`. |
+| ¿Deadband en el modelo `Tag`? (Rev 4 · R4) | **Desde F1**: `deadband: float=0.0`, `deadband_mode: Literal["abs","pct"]="abs"`. |
+| ¿`schema_version` cómo? (Rev 4 · R5) | Unión **discriminada** en `Project` desde F1, aunque solo exista v1. |
+| ¿`pymodbus` pinneado? (Rev 4 · R6) | **`pymodbus>=3.6,<4`** + simulador en fixture de pytest reutilizable. |
 
 ---
 

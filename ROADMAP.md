@@ -17,10 +17,13 @@ trabajo que seguimos en este proyecto:
    | Tipo de tarea | Modelo recomendado | Por qué |
    |---|---|---|
    | Arquitectura, decisiones críticas, revisión de seguridad | **Opus (Claude)** | razonamiento profundo, pocas llamadas |
+   | **Contratos de interfaz y esquemas base** (`ws/protocol.py`, `Tag`/`Node`/`Project`, `BaseDriver`, discriminators Pydantic) | **Opus** | es interfaz, no boilerplate; que el económico no la fije "por la puerta de atrás" (Rev 4) |
+   | **Concurrencia del engine** (`runtime.py` TaskGroup, locking del TagCache) | **Opus** | bug de concurrencia = dato silenciosamente incorrecto, no "atasco"; proactivo, no reactivo (Rev 4) |
    | Implementación de drivers/boilerplate repetitivo | **Modelo económico** (Gemini Flash / GLM / Sonnet) | patrón conocido, alto volumen |
    | Frontend React — **store global + sync WebSocket↔Canvas** | **Sonnet** (nivel intermedio) | manejo de conexiones/eventos de render tiene complejidad real (Rev 3) |
    | Frontend React — componentes gráficos estáticos (tanques, medidores, botones) | **Modelo económico** | repetitivo, verificable a ojo |
-   | Tests unitarios (con clase+interfaz concreta) | **Modelo económico** | plantilla + casos; delegar ahorra tokens |
+   | Tests unitarios — happy-path y plantillas | **Modelo económico** | plantilla + casos; delegar ahorra tokens |
+   | Tests unitarios — **escenarios del engine** (concurrencia, deadband, overflow) | **Opus define, económico implementa** | sin esto los tests quedan en superficie y R3 se cuela (Rev 4) |
    | Debug puntual difícil | **Opus** solo cuando el económico se atasca | reservar potencia |
 
 2. **Cerrar el diseño ANTES de codificar.** Ya está hecho: `ARCHITECTURE.md` es
@@ -41,6 +44,12 @@ trabajo que seguimos en este proyecto:
 6. **Presupuesto por fase (semáforo).** Si una fase supera ~1.5× su estimación
    de esfuerzo, parar y revisar el enfoque en vez de seguir quemando.
 
+7. **Semáforo por sesión, no solo por fase (Rev 4).** Una sesión de *debug* puede
+   consumir más tokens que toda una fase de implementación económica. Si un modelo
+   económico entra en bucle "prueba esto → no funciona", **cortar y escalar a Opus
+   antes** del 1.5× de fase — el criterio de escalamiento de la fila "Debug puntual"
+   es por sesión, no diferido hasta agotar la fase.
+
 ---
 
 ## 1. Fases
@@ -60,14 +69,22 @@ Diseño cerrado y repo listo para construir.
 
 ### Fase 1 — Núcleo del motor (MVP ejecutable) · *~3–4 j* — **prioridad**
 El corazón: productor/TagCache/consumer con **un** driver, end-to-end.
-- [ ] `models/` — esquemas Pydantic v2 del proyecto/nodos/tags (`schema_version`)
+- [ ] `models/` — Pydantic v2: `Tag` (incl. `deadband: float=0.0`, `deadband_mode:
+      Literal["abs","pct"]="abs"`, R4), nodos discriminados por `type`, y `Project`
+      como **unión discriminada por `schema_version`** desde v1 (R5)
+- [ ] `ws/protocol.py` — **esquema de mensajes WS** (`tag_update`/`subscribe`/`ack`/
+      `overflow`), definido con Opus junto a `BaseDriver` (R1) — *entregable de F1*
 - [ ] `drivers/base.py` (incl. firma async `write_tag`, Rev 3) + `drivers/registry.py` (Factory + decorador)
 - [ ] `drivers/modbus_driver.py` (driver de referencia, contra simulador)
-- [ ] `engine/tag_cache.py` (deadband) + `engine/runtime.py` + `scan_scheduler.py`
-      **neutro de protocolo** (recibe lista genérica de `Tag`; el driver traduce "contiguo", Rev 3)
+- [ ] `engine/tag_cache.py` — deadband + **política de concurrencia** (lock por tag
+      o copy-on-write, documentada, R3)
+- [ ] `engine/runtime.py` con **`asyncio.TaskGroup`** (un grupo por driver, cleanup
+      garantizado, R2) + `scan_scheduler.py` **neutro de protocolo** (Rev 3)
 - [ ] `ws/manager.py` (ConnectionManager con colas acotadas + backpressure)
 - [ ] `api/` mínimo: cargar proyecto JSON, listar tags, endpoint WS
-- [ ] Tests del TagCache, backpressure y registry
+- [ ] `pyproject.toml`: pinear **`pymodbus>=3.6,<4`** (R6)
+- [ ] Tests del TagCache (concurrencia, deadband, overflow de cola), backpressure y
+      registry; simulador Modbus en **fixture de pytest reutilizable** (R6)
 - **Salida:** levantar el backend, conectar a un Modbus simulado, ver valores por
   WebSocket en tiempo real. **Hito demostrable.**
 - **Modelo:** interfaces con Opus; driver/tests con modelo económico. `[dep: F0]`
