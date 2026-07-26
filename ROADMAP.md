@@ -8,47 +8,41 @@
 
 ---
 
-## 0. Estrategia de coste (leer primero)
+## 0. Flujo de trabajo y estrategia de coste (leer primero)
 
-El objetivo es **no gastar todo el presupuesto de tokens de golpe**. Reglas de
-trabajo que seguimos en este proyecto:
+**Roles del equipo (humano + IA):**
+- **Claude (Opus)** implementa el código **fase por fase**.
+- **GLM y Gemini** son **revisores/críticos**: sobre cada fase entregada proponen
+  mejoras, alternativas y ajustes para hacer el sistema más fluido. Sus aportes
+  aceptados se integran como una nueva "Rev N" en los documentos y luego en el código.
 
-1. **Un modelo por tipo de tarea (routing de coste):**
-   | Tipo de tarea | Modelo recomendado | Por qué |
-   |---|---|---|
-   | Arquitectura, decisiones críticas, revisión de seguridad | **Opus (Claude)** | razonamiento profundo, pocas llamadas |
-   | **Contratos de interfaz y esquemas base** (`ws/protocol.py`, `Tag`/`Node`/`Project`, `BaseDriver`, discriminators Pydantic) | **Opus** | es interfaz, no boilerplate; que el económico no la fije "por la puerta de atrás" (Rev 4) |
-   | **Concurrencia del engine** (`runtime.py` TaskGroup, locking del TagCache) | **Opus** | bug de concurrencia = dato silenciosamente incorrecto, no "atasco"; proactivo, no reactivo (Rev 4) |
-   | Implementación de drivers/boilerplate repetitivo | **Modelo económico** (Gemini Flash / GLM / Sonnet) | patrón conocido, alto volumen |
-   | Frontend React — **store global + sync WebSocket↔Canvas** | **Sonnet** (nivel intermedio) | manejo de conexiones/eventos de render tiene complejidad real (Rev 3) |
-   | Frontend React — componentes gráficos estáticos (tanques, medidores, botones) | **Modelo económico** | repetitivo, verificable a ojo |
-   | Tests unitarios — happy-path y plantillas | **Modelo económico** | plantilla + casos; delegar ahorra tokens |
-   | Tests unitarios — **escenarios del engine** (concurrencia, deadband, overflow) | **Opus define, económico implementa** | sin esto los tests quedan en superficie y R3 se cuela (Rev 4) |
-   | Debug puntual difícil | **Opus** solo cuando el económico se atasca | reservar potencia |
+El objetivo es **no gastar todo el presupuesto de tokens de golpe**. Reglas:
 
-2. **Cerrar el diseño ANTES de codificar.** Ya está hecho: `ARCHITECTURE.md` es
-   la fuente de verdad. No se re-discute arquitectura en cada sesión (eso quema
-   tokens repitiendo contexto).
+1. **Cerrar el diseño ANTES de codificar.** Hecho: `ARCHITECTURE.md` es la fuente
+   de verdad. No se re-discute arquitectura en cada sesión (eso quema tokens
+   repitiendo contexto). Los revisores comentan sobre el diseño cerrado, no lo
+   reabren entero.
 
-3. **Fases atómicas y verificables.** Cada fase produce algo *ejecutable y
-   testeable*. Se cierra, se commitea, y se abre la siguiente en **sesión
-   nueva** (contexto mínimo → menos tokens por llamada).
+2. **Fases atómicas y verificables.** Cada fase produce algo *ejecutable y
+   testeable* (F1 = 14 tests verdes). Se cierra, se commitea, y se abre la
+   siguiente en **sesión nueva** (contexto mínimo → menos tokens por llamada).
 
-4. **Contexto mínimo por sesión.** Trabajar carpeta por carpeta. No cargar todo
-   el repo; apuntar el modelo solo a los archivos de la fase.
+3. **Contexto mínimo por sesión.** Trabajar carpeta por carpeta; apuntar solo a
+   los archivos de la fase, no cargar todo el repo.
 
-5. **Andamiaje una vez, relleno barato.** Opus define las **interfaces**
-   (`BaseDriver`, esquemas Pydantic, contratos WS); los modelos económicos
-   rellenan implementaciones contra esas interfaces.
+4. **Ciclo revisar-una-vez, integrar-en-lote.** Los revisores dan feedback sobre
+   la fase entregada; se integra en un solo pase (como Rev 3/Rev 4), no en un
+   ida-y-vuelta continuo que multiplica llamadas.
 
-6. **Presupuesto por fase (semáforo).** Si una fase supera ~1.5× su estimación
-   de esfuerzo, parar y revisar el enfoque en vez de seguir quemando.
+5. **Presupuesto por fase (semáforo).** Si una fase supera ~1.5× su estimación de
+   esfuerzo, parar y revisar el enfoque en vez de seguir quemando.
 
-7. **Semáforo por sesión, no solo por fase (Rev 4).** Una sesión de *debug* puede
-   consumir más tokens que toda una fase de implementación económica. Si un modelo
-   económico entra en bucle "prueba esto → no funciona", **cortar y escalar a Opus
-   antes** del 1.5× de fase — el criterio de escalamiento de la fila "Debug puntual"
-   es por sesión, no diferido hasta agotar la fase.
+6. **Semáforo por sesión, no solo por fase (Rev 4).** Una sesión de *debug* puede
+   consumir más tokens que toda una fase de implementación. Si el trabajo entra en
+   bucle "prueba esto → no funciona" (p. ej. pelear con una API de librería en
+   transición), **cortar y cambiar de enfoque antes** del 1.5× de fase, no diferir
+   hasta agotar la fase. *(Ejemplo real: el pin de `pymodbus` a `<3.9` se decidió al
+   toparse con el datastore en migración de 3.14, en vez de seguir depurándolo.)*
 
 ---
 
@@ -57,37 +51,30 @@ trabajo que seguimos en este proyecto:
 Estimaciones en **jornadas de trabajo efectivo** (no días de calendario) para 1
 desarrollador con apoyo de IA. `[dep]` = depende de.
 
-### Fase 0 — Fundaciones del repo · *~0.5 j* ✅ (en curso)
+### Fase 0 — Fundaciones del repo · *~0.5 j* ✅ **Completa**
 Diseño cerrado y repo listo para construir.
 - [x] `README.md` (spec de alto nivel)
-- [x] `ARCHITECTURE.md` consolidado (Rev 1 + Rev 2)
+- [x] `ARCHITECTURE.md` consolidado (Rev 1–4)
 - [x] `ROADMAP.md` (este archivo)
-- [ ] `pyproject.toml` + estructura vacía de carpetas + `.pre-commit` (ruff/black)
-- [ ] `docker-compose.yml` esqueleto (backend + SQLite + **simulador Modbus TCP**
-      —`pymodbus.server` o contenedor `diagslave`— para validar sin PLC físico, Rev 3)
-- **Modelo:** Opus (cierre de diseño). **Coste:** bajo.
+- [x] `pyproject.toml` + estructura de carpetas del backend
+- [x] `docker-compose.yml` (backend + **simulador Modbus TCP**) para validar sin PLC físico
 
-### Fase 1 — Núcleo del motor (MVP ejecutable) · *~3–4 j* — **prioridad**
+### Fase 1 — Núcleo del motor (MVP ejecutable) · *~3–4 j* ✅ **Completa (14 tests verdes)**
 El corazón: productor/TagCache/consumer con **un** driver, end-to-end.
-- [ ] `models/` — Pydantic v2: `Tag` (incl. `deadband: float=0.0`, `deadband_mode:
-      Literal["abs","pct"]="abs"`, R4), nodos discriminados por `type`, y `Project`
-      como **unión discriminada por `schema_version`** desde v1 (R5)
-- [ ] `ws/protocol.py` — **esquema de mensajes WS** (`tag_update`/`subscribe`/`ack`/
-      `overflow`), definido con Opus junto a `BaseDriver` (R1) — *entregable de F1*
-- [ ] `drivers/base.py` (incl. firma async `write_tag`, Rev 3) + `drivers/registry.py` (Factory + decorador)
-- [ ] `drivers/modbus_driver.py` (driver de referencia, contra simulador)
-- [ ] `engine/tag_cache.py` — deadband + **política de concurrencia** (lock por tag
-      o copy-on-write, documentada, R3)
-- [ ] `engine/runtime.py` con **`asyncio.TaskGroup`** (un grupo por driver, cleanup
-      garantizado, R2) + `scan_scheduler.py` **neutro de protocolo** (Rev 3)
-- [ ] `ws/manager.py` (ConnectionManager con colas acotadas + backpressure)
-- [ ] `api/` mínimo: cargar proyecto JSON, listar tags, endpoint WS
-- [ ] `pyproject.toml`: pinear **`pymodbus>=3.6,<4`** (R6)
-- [ ] Tests del TagCache (concurrencia, deadband, overflow de cola), backpressure y
-      registry; simulador Modbus en **fixture de pytest reutilizable** (R6)
-- **Salida:** levantar el backend, conectar a un Modbus simulado, ver valores por
-  WebSocket en tiempo real. **Hito demostrable.**
-- **Modelo:** interfaces con Opus; driver/tests con modelo económico. `[dep: F0]`
+- [x] `models/` — Pydantic v2: `Tag` (`deadband`/`deadband_mode`, R4), nodos
+      discriminados por `type`, `Project` como unión discriminada por `schema_version` (R5)
+- [x] `ws/protocol.py` — esquema de mensajes WS (R1)
+- [x] `drivers/base.py` (async `write_tag`, Rev 3) + `drivers/registry.py` (Factory + decorador)
+- [x] `drivers/modbus_driver.py` (real, lectura por bloques) + `drivers/modbus_sim.py`
+- [x] `engine/tag_cache.py` — deadband + copy-on-write (R3)
+- [x] `engine/runtime.py` con **`asyncio.TaskGroup`** (R2) + `scan_scheduler.py` neutro (Rev 3)
+- [x] `ws/manager.py` (ConnectionManager con colas acotadas + backpressure drop-oldest)
+- [x] `api/` (`POST /projects`, `GET /projects/current`, `GET /tags`) + `main.py` WS `/ws`
+- [x] `pyproject.toml`: pin **`pymodbus>=3.6,<3.9`** (R6, ver §0.6)
+- [x] Tests: deadband, backpressure, unión discriminada, registry, roundtrip driver↔sim,
+      y **end-to-end** API→runtime→tags; simulador en fixture de pytest reutilizable (R6)
+- **Salida:** ✅ backend levanta, conecta al Modbus simulado y expone valores por API/WS.
+- **Modelo:** implementado por Opus; pendiente de revisión por GLM/Gemini. `[dep: F0]`
 
 ### Fase 2 — Drivers reales + persistencia + observabilidad básica · *~4–5 j*
 - [ ] `drivers/s7_driver.py` (snap7 en thread pool) `[crítico: no bloquear loop]`
@@ -98,8 +85,8 @@ El corazón: productor/TagCache/consumer con **un** driver, end-to-end.
 - [ ] Motor de Alarmas (suscriptor) + notificación (Telegram/SMTP)
 - [ ] `observability/metrics.py` (Prometheus) + `health.py`
 - **Salida:** varios protocolos reales, histórico persistido, alarmas y métricas.
-- **Modelo:** cada driver es patrón conocido → **económico**; Opus solo para
-  snap7 (threading) y el diseño de seguridad. `[dep: F1]`
+- **Ejecución:** implementa Opus (atención especial a snap7/threading y seguridad);
+  revisan GLM/Gemini. `[dep: F1]`
 
 ### Fase 3 — Frontend (canvas HMI) · *~5–6 j*
 - [ ] Scaffold React + React Flow; paleta / canvas / inspector
@@ -108,8 +95,8 @@ El corazón: productor/TagCache/consumer con **un** driver, end-to-end.
 - [ ] Widgets HMI base (tanque, válvula, gráfico) + nodos de driver/lógica
 - [ ] Import/export del JSON de proyecto (mismo `schema_version` que backend)
 - **Salida:** diseñar un proceso arrastrando nodos y ver datos en vivo.
-- **Modelo:** React repetitivo → **económico**; Opus solo para el contrato de
-  datos WS↔canvas. `[dep: F1]` (puede solaparse con F2)
+- **Ejecución:** implementa Opus (el contrato WS↔canvas ya está fijado en F1);
+  revisan GLM/Gemini. `[dep: F1]` (puede solaparse con F2)
 
 ### Fase 4 — Escalado, multi-tenant y hardening (cloud-native) · *~4–5 j*
 Solo cuando se necesite el modo cloud-native. **Diferible.**
@@ -119,14 +106,14 @@ Solo cuando se necesite el modo cloud-native. **Diferible.**
 - [ ] `entry_points` en `DriverRegistry.discover()` (plugins externos)
 - [ ] Tracing OpenTelemetry
 - [ ] Sparkplug B (implementación Protobuf) si el flag se activa
-- **Modelo:** económico para relleno; Opus para Redis/Casbin/seguridad.
-  `[dep: F2, F3]`
+- **Ejecución:** implementa Opus (Redis/Casbin/seguridad son críticos);
+  revisan GLM/Gemini. `[dep: F2, F3]`
 
 ### Fase 5 — Empaquetado y despliegue · *~2 j*
 - [ ] `docker-compose.yml` completo por modo (air-gapped / híbrido / cloud)
 - [ ] Docs de instalación + `HEALTHCHECK` + guía de operación
 - [ ] Build del frontend embebido para air-gapped (sin CDNs)
-- **Modelo:** económico. `[dep: todas]`
+- **Ejecución:** implementa Opus; revisan GLM/Gemini. `[dep: todas]`
 
 ---
 

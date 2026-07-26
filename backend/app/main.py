@@ -1,7 +1,8 @@
 """Aplicación FastAPI + lifespan del motor (ARCHITECTURE §5).
 
-F1 mínimo demostrable: cargar un proyecto JSON, arrancar el Runtime, y exponer un
-endpoint WebSocket que hace streaming de tags con el contrato de `ws/protocol.py`.
+F1 mínimo demostrable: cargar un proyecto JSON (POST /projects), arrancar el
+Runtime, y exponer un endpoint WebSocket que hace streaming de tags con el
+contrato de `ws/protocol.py`.
 """
 
 from __future__ import annotations
@@ -14,37 +15,30 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 import app.drivers  # noqa: F401 - efecto: registra los drivers built-in
-from app.engine.runtime import Runtime
-from app.ws.manager import ConnectionManager
-from app.ws.protocol import ClientMessageAdapter, SubscribeMsg, UnsubscribeMsg, WriteMsg, AckMsg
+from app.api import router as api_router
+from app.state import state
+from app.ws.protocol import (
+    AckMsg,
+    ClientMessageAdapter,
+    SubscribeMsg,
+    TagUpdateMsg,
+    UnsubscribeMsg,
+    WriteMsg,
+)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("iiot.main")
 
 
-class AppState:
-    runtime: Runtime | None = None
-    manager: ConnectionManager = ConnectionManager()
-    runtime_task: asyncio.Task | None = None
-
-
-state = AppState()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # F1: sin proyecto cargado al arranque; se carga vía API (TODO(econ) en api/).
-    # Cuando haya runtime, su TagCache notifica al ConnectionManager.
+    # F1: sin proyecto al arranque; se carga vía POST /projects.
     yield
-    if state.runtime is not None:
-        state.runtime.stop()
-    if state.runtime_task is not None:
-        state.runtime_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await state.runtime_task
+    await state.stop_project()
 
 
 app = FastAPI(title="IIoT Platform Backend", version="0.1.0", lifespan=lifespan)
+app.include_router(api_router)
 
 
 @app.get("/health")
@@ -61,10 +55,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
             msg = ClientMessageAdapter.validate_json(raw)
             if isinstance(msg, SubscribeMsg):
                 state.manager.subscribe(client, msg.tag_ids)
-                # Enviar snapshot inicial si hay runtime.
                 if state.runtime is not None:
-                    from app.ws.protocol import TagUpdateMsg
-
                     snap = state.runtime.tag_cache.snapshot(msg.tag_ids)
                     if snap:
                         await ws.send_text(TagUpdateMsg(values=snap).model_dump_json())

@@ -63,6 +63,7 @@ class Runtime:
         poll_rate = float(node.config.get("polling_rate", 1.0))
         backoff = _BACKOFF_START
         driver = create_driver(node)
+        driver.bind_tags(self.scheduler.tags_for(node.id))
         self._drivers[node.id] = driver
 
         while not self._stopping.is_set():

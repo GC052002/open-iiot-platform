@@ -10,8 +10,10 @@ dependencies = [
     "fastapi>=0.110,<1",
     "uvicorn[standard]>=0.29,<1",
     "pydantic>=2.6,<3",
-    # R6 (ARCHITECTURE §3.10): pin de pymodbus para no romper con un bump mayor.
-    "pymodbus>=3.6,<4",
+    # R6 (ARCHITECTURE §3.10): pin de pymodbus. Techo en <3.9: 3.9+ inicia la
+    # migración del datastore a SimData/SimDevice (rumbo a 4.0) y depreca la API
+    # clásica de servidor que usa el simulador. Se revisará al portar a 4.x.
+    "pymodbus>=3.6,<3.9",
     "cryptography>=42",          # Fernet (cifrado de credenciales, §3.5)
 ]
 

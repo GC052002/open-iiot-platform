@@ -31,6 +31,13 @@ class BaseDriver(abc.ABC):
     def __init__(self, node: DriverNode) -> None:
         self.node = node
         self.config = node.config
+        #: Tags que pertenecen a este driver, indexados por id. Los inyecta el
+        #: Runtime con `bind_tags` para que `write_tag` pueda resolver direcciones.
+        self._tags: dict[str, Tag] = {}
+
+    def bind_tags(self, tags: list[Tag]) -> None:
+        """El Runtime asigna al driver los tags de su nodo (§4)."""
+        self._tags = {t.id: t for t in tags}
 
     @abc.abstractmethod
     async def connect(self) -> None:
