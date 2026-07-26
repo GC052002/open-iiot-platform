@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import logging
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
@@ -42,8 +43,11 @@ app.include_router(api_router)
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health() -> dict[str, Any]:
+    # R-M2: reflejar el estado real del runtime, no un "ok" fijo.
+    runtime_health = state.runtime.health() if state.runtime is not None else None
+    ok = runtime_health is None or runtime_health["healthy"]
+    return {"status": "ok" if ok else "degraded", "runtime": runtime_health}
 
 
 @app.websocket("/ws")

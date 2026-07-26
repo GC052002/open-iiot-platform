@@ -52,8 +52,12 @@ class ConnectionManager:
 
     def disconnect(self, client: _Client) -> None:
         self._clients.discard(client)
-        for tag_id in client.tag_ids:
+        for tag_id in list(client.tag_ids):
             self._subs.get(tag_id, set()).discard(client)
+        client.tag_ids.clear()  # evita que _enqueue siga enrutando aquí (W-m1)
+        # Vaciar la cola pendiente para liberar memoria de un cliente muerto.
+        while not client.queue.empty():
+            client.queue.get_nowait()
 
     def subscribe(self, client: _Client, tag_ids: list[str]) -> None:
         for tag_id in tag_ids:
@@ -78,6 +82,9 @@ class ConnectionManager:
             self._enqueue(client, TagUpdateMsg(values=values))
 
     def _enqueue(self, client: _Client, msg: TagUpdateMsg) -> None:
+        # TODO(F2, W-M2): coalescing — fusionar valores con el último TagUpdateMsg en
+        # cola para no mandar N mensajes ante N cambios escalonados (overhead a 1000
+        # tags). Requiere un _last_msg por cliente; en F1 con el simulador no se nota.
         try:
             client.queue.put_nowait(msg)
         except asyncio.QueueFull:
@@ -98,7 +105,9 @@ class ConnectionManager:
         afecta a sí mismo."""
         while True:
             msg = await client.queue.get()
+            # Primero el dato; el overflow avisa de muestras ANTERIORES ya perdidas,
+            # así el orden es coherente para re-sincronización (W-M1).
+            await client.ws.send_text(msg.model_dump_json())
             if client.dropped:
                 await client.ws.send_text(OverflowMsg(dropped=client.dropped).model_dump_json())
                 client.dropped = 0
-            await client.ws.send_text(msg.model_dump_json())

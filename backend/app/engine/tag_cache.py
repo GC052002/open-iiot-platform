@@ -7,11 +7,12 @@ corren en hilos (§3.1) NO tocan el cache directamente: entregan sus muestras al
 loop (el runtime las aplica con `await update(...)`), de modo que las
 modificaciones quedan serializadas por el propio loop.
 
-Elegimos **copy-on-write de la entrada** en lugar de un lock global: cada `update`
-reemplaza el objeto `TagValue` completo (inmutable desde el punto de vista del
-lector), así un suscriptor que lea `get()` nunca observa una entrada a medio
-escribir. Para invariantes que abarcan varias claves se usa un `asyncio.Lock`
-de grano fino (`_write_lock`), no un lock por lectura.
+Elegimos **reemplazo atómico de la entrada** bajo un `asyncio.Lock` de grano fino
+(`_write_lock`): cada `update` sustituye el objeto `TagValue` completo. `get()` y
+`snapshot()` son seguros sin lock porque no tienen puntos `await` y asyncio corre
+en un único loop, de modo que un lector nunca observa una entrada a medio escribir.
+La notificación a suscriptores se hace **fuera** del lock (T-M1) para que un
+suscriptor lento no bloquee a los writers.
 
 El TagCache es un **sujeto Observer**: notifica a sus suscriptores (Broadcaster en
 F1; Alarmas y TagBuffer en F2) solo ante cambios significativos según el deadband.
@@ -38,6 +39,8 @@ class TagCache:
     # -- Configuración de tags ------------------------------------------------
     def set_tags(self, tags: dict[str, Tag]) -> None:
         self._tags = dict(tags)
+        # Limpiar valores de tags que ya no existen (T-M2, recarga de proyecto en F2).
+        self._values = {k: v for k, v in self._values.items() if k in self._tags}
 
     # -- Observer -------------------------------------------------------------
     def subscribe(self, subscriber: Subscriber) -> None:
@@ -67,8 +70,8 @@ class TagCache:
     async def update(self, samples: list[TagValue]) -> list[TagValue]:
         """Aplica muestras nuevas. Devuelve las que superaron el deadband.
 
-        Copy-on-write: se reemplaza la entrada completa. La notificación a
-        suscriptores ocurre solo con los cambios significativos.
+        Reemplazo atómico de la entrada bajo `_write_lock`; la notificación a
+        suscriptores ocurre FUERA del lock (T-M1) y solo con cambios significativos.
         """
         changed: list[TagValue] = []
         async with self._write_lock:

@@ -41,6 +41,8 @@ class Runtime:
         self.scheduler = ScanScheduler(project.tags)
         self._drivers: dict[str, BaseDriver] = {}
         self._stopping = asyncio.Event()
+        self._tasks: list[asyncio.Task] = []
+        self._healthy = True
 
     # -- Ciclo de vida --------------------------------------------------------
     async def run(self) -> None:
@@ -49,14 +51,28 @@ class Runtime:
         try:
             async with asyncio.TaskGroup() as tg:
                 for node in driver_nodes:
-                    tg.create_task(self._driver_scan_loop(node), name=f"scan:{node.id}")
+                    task = tg.create_task(self._driver_scan_loop(node), name=f"scan:{node.id}")
+                    self._tasks.append(task)
         except* Exception as eg:  # noqa: E999 - except* requiere py3.11
-            # El TaskGroup agrega las excepciones; se registran y se propaga el shutdown.
+            # Si el grupo termina por excepción (no por cancelación), el runtime queda
+            # degradado: se marca no-sano para que /health no siga diciendo "ok" (R-M2).
+            self._healthy = False
             for exc in eg.exceptions:
                 log.exception("Fallo en un scan loop", exc_info=exc)
 
     def stop(self) -> None:
+        """Señaliza parada y **cancela** los scan loops (R-H1).
+
+        `asyncio.TaskGroup` no expone `cancel()` hasta Python 3.13; cancelamos las
+        tareas guardadas para que un driver bloqueado en I/O no cuelgue el shutdown.
+        TODO(py3.13): reemplazar por `self._tg.cancel()`.
+        """
         self._stopping.set()
+        for task in self._tasks:
+            task.cancel()
+
+    def health(self) -> dict[str, Any]:
+        return {"healthy": self._healthy, "drivers": sorted(self._drivers)}
 
     # -- Scan loop por driver -------------------------------------------------
     async def _driver_scan_loop(self, node: DriverNode) -> None:
@@ -74,7 +90,8 @@ class Runtime:
                     tags = self.scheduler.tags_for(node.id)
                     samples = await driver.read_block(tags)
                     await self.tag_cache.update(samples)
-                    await asyncio.sleep(poll_rate)
+                    # Sleep interrumpible por stop() (R-M1): shutdown determinista.
+                    await self._sleep_or_stop(poll_rate)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # reconexión con backoff, sin tumbar el resto

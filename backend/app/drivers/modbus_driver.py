@@ -8,12 +8,18 @@ hace una lectura Modbus por bloque, luego rebana el resultado. El scheduler entr
 una lista genérica de `Tag`; aquí es donde se traduce qué significa "contiguo".
 
 Convención de direcciones: `tag.address` = offset entero del Holding Register.
-Config del nodo (`DriverNode.config`): `host`, `port` (def. 502), `unit` (def. 1).
+Config del nodo (`DriverNode.config`): `host`, `port` (def. 502), `unit` (def. 1),
+`timeout` (def. 3.0), `retries` (def. 1).
+
+Decodificación (D-M3): `read_block` interpreta los registros según `tag.data_type`
+(bool/int en 1 registro; float en 2, big-endian). Un `float` ocupa 2 registros
+consecutivos a partir de su dirección base.
 """
 
 from __future__ import annotations
 
 import logging
+import struct
 from typing import Any
 
 from pymodbus.client import AsyncModbusTcpClient
@@ -23,6 +29,24 @@ from app.drivers.registry import register_driver
 from app.models.tag import Tag, TagValue
 
 log = logging.getLogger("iiot.driver.modbus")
+
+
+def _register_count(data_type: str) -> int:
+    """Nº de registros de 16 bits que ocupa un tipo. float32 = 2; resto = 1."""
+    return 2 if data_type == "float" else 1
+
+
+def _decode(registers: list[int], tag: Tag) -> Any:
+    """Interpreta registros crudos según `tag.data_type` (D-M3)."""
+    if tag.data_type == "bool":
+        return bool(registers[0] & 1)
+    if tag.data_type == "float":
+        raw = (registers[0] << 16) | registers[1]
+        return struct.unpack(">f", struct.pack(">I", raw))[0]
+    if tag.data_type == "string":
+        # TODO(F2): longitud configurable; por ahora 1 registro = 2 chars.
+        return "".join(chr(r >> 8) + chr(r & 0xFF) for r in registers).rstrip("\x00")
+    return registers[0]  # int (y por defecto)
 
 
 def _group_contiguous(addresses: list[int]) -> list[tuple[int, int]]:
@@ -49,11 +73,23 @@ class ModbusDriver(BaseDriver):
         self._host: str = self.config.get("host", "127.0.0.1")
         self._port: int = int(self.config.get("port", 502))
         self._unit: int = int(self.config.get("unit", 1))
+        self._timeout: float = float(self.config.get("timeout", 3.0))
+        self._retries: int = int(self.config.get("retries", 1))
         self._client: AsyncModbusTcpClient | None = None
 
     async def connect(self) -> None:
         if self._client is None:
-            self._client = AsyncModbusTcpClient(self._host, port=self._port)
+            # D-H2: timeout/retries acotados para que un PLC en black-hole levante
+            # ConnectionException en ~timeout s (y el runtime aplique backoff), en vez
+            # de congelar el scan loop hasta el timeout TCP del SO.
+            self._client = AsyncModbusTcpClient(
+                self._host,
+                port=self._port,
+                timeout=self._timeout,
+                retries=self._retries,
+                reconnect_delay=0.5,
+                reconnect_delay_max=5.0,
+            )
         await self._client.connect()
         if not self._client.connected:
             raise ConnectionError(f"No se pudo conectar a Modbus {self._host}:{self._port}")
@@ -67,22 +103,38 @@ class ModbusDriver(BaseDriver):
         if not tags or self._client is None:
             return []
 
-        # Mapear dirección -> tags (varios tags pueden compartir dirección).
-        by_addr: dict[int, list[Tag]] = {}
-        for tag in tags:
-            by_addr.setdefault(int(tag.address), []).append(tag)
-
+        # 1) Resolver dirección base y ancho (registros) de cada tag; reunir todas
+        #    las direcciones necesarias. Un float ocupa 2 registros (D-M3).
+        spans: list[tuple[Tag, int, int]] = []  # (tag, start, width)
+        needed: set[int] = set()
         results: list[TagValue] = []
-        for start, count in _group_contiguous(list(by_addr)):
-            rr = await self._client.read_holding_registers(start, count=count, slave=self._unit)
-            if rr.isError():
-                for addr in range(start, start + count):
-                    for tag in by_addr.get(addr, []):
-                        results.append(TagValue(tag_id=tag.id, value=None, quality="bad"))
+        for tag in tags:
+            try:
+                start = int(tag.address)  # D-m2: dirección no numérica -> bad, no crash
+            except (ValueError, TypeError):
+                log.warning("Tag %s con dirección no numérica %r en Modbus", tag.id, tag.address)
+                results.append(TagValue(tag_id=tag.id, value=None, quality="bad"))
                 continue
+            width = _register_count(tag.data_type)
+            spans.append((tag, start, width))
+            needed.update(range(start, start + width))
+
+        # 2) Leer por rangos contiguos que cubran todas las direcciones necesarias.
+        registers: dict[int, int] = {}
+        for gstart, gcount in _group_contiguous(sorted(needed)):
+            rr = await self._client.read_holding_registers(gstart, count=gcount, slave=self._unit)
+            if rr.isError():
+                continue  # las direcciones ausentes se marcan bad abajo
             for offset, reg in enumerate(rr.registers):
-                for tag in by_addr.get(start + offset, []):
-                    results.append(TagValue(tag_id=tag.id, value=reg, quality="good"))
+                registers[gstart + offset] = reg
+
+        # 3) Decodificar cada tag desde sus registros.
+        for tag, start, width in spans:
+            regs = [registers.get(a) for a in range(start, start + width)]
+            if any(r is None for r in regs):
+                results.append(TagValue(tag_id=tag.id, value=None, quality="bad"))
+            else:
+                results.append(TagValue(tag_id=tag.id, value=_decode(regs, tag), quality="good"))
         return results
 
     async def write_tag(self, tag_id: str, value: Any) -> bool:

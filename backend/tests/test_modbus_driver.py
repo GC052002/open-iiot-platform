@@ -23,9 +23,9 @@ def _driver(host: str, port: int, tags: list[Tag]) -> ModbusDriver:
 async def test_connect_and_read_block(modbus_sim_server):
     host, port = modbus_sim_server
     tags = [
-        Tag(id="t0", name="r0", driver_id="d1", address="0"),
-        Tag(id="t1", name="r1", driver_id="d1", address="1"),
-        Tag(id="t5", name="r5", driver_id="d1", address="5"),
+        Tag(id="t0", name="r0", driver_id="d1", address="0", data_type="int"),
+        Tag(id="t1", name="r1", driver_id="d1", address="1", data_type="int"),
+        Tag(id="t5", name="r5", driver_id="d1", address="5", data_type="int"),
     ]
     drv = _driver(host, port, tags)
     await drv.connect()
@@ -42,7 +42,7 @@ async def test_connect_and_read_block(modbus_sim_server):
 async def test_write_then_read_roundtrip(modbus_sim_server):
     host, port = modbus_sim_server
     # Dirección en la región estática del simulador (>=16) para evitar el updater.
-    tag = Tag(id="tw", name="rw", driver_id="d1", address="20")
+    tag = Tag(id="tw", name="rw", driver_id="d1", address="20", data_type="int")
     drv = _driver(host, port, [tag])
     await drv.connect()
     try:

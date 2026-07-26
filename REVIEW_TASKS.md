@@ -49,6 +49,30 @@ agrupación contigua, roundtrip driver↔simulador, y **end-to-end** API→runti
 - `drivers/modbus_driver.py`: ¿la agrupación por rangos contiguos y el mapeo de
   direcciones es razonable para escalar a S7/OPC UA en F2?
 
+## Rev 5 — Resultado de la revisión externa (Gemini) de F1 · 2026-07-26
+
+Revisión del commit `01cecf2` (F1). Veredicto: mergeable; 2 críticos que solo se
+manifiestan con PLC real (no con el simulador). **Todo lo accionable se corrigió**;
+lo pesado orientado a F2 se difiere de forma documentada.
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| **R-H1** | runtime.py | `stop()` no cancelaba el TaskGroup → shutdown colgado | ✅ Corregido (guarda tareas y las cancela; `health()`) |
+| **D-H2** | modbus_driver.py | cliente sin timeout → PLC black-hole congela el scan loop | ✅ Corregido (`timeout=3`, `retries`, `reconnect_delay`) |
+| R-M1 | runtime.py | `sleep(poll_rate)` no interrumpible | ✅ Corregido (`_sleep_or_stop`) |
+| R-M2 | runtime.py | runtime moría en silencio, `/health` seguía ok | ✅ Corregido (`_healthy` + `/health` real) |
+| T-M1 | tag_cache.py | `_notify` dentro del lock | ✅ Ya estaba fuera del lock; solo se ajustó el docstring |
+| T-M2 | tag_cache.py | `set_tags` no limpiaba huérfanos | ✅ Corregido |
+| W-M1 | ws/manager.py | orden `OverflowMsg` antes del dato | ✅ Corregido (dato primero) |
+| W-m1 | ws/manager.py | `disconnect` no vaciaba la cola | ✅ Corregido |
+| D-M3 | modbus_driver.py | ignoraba `data_type` (registro crudo) | ✅ Corregido (`_decode` int/bool/float32/string + ancho de registro) |
+| D-m2 | modbus_driver.py | `int(address)` sin try/except | ✅ Corregido (marca `bad`, no crashea) |
+| W-M2 | ws/manager.py | sin coalescing de `TagUpdateMsg` | ⏳ Diferido a F2 (TODO en código; no afecta a F1) |
+| D-M4 | base.py | plantilla `read_block` no extraída para S7/OPC UA | ⏳ Diferido a F2 (ver ARCHITECTURE §9): generalizar con 2 drivers reales evita abstracción especulativa |
+
+Tests añadidos (`test_rev5_fixes.py`): decode float/bool/int, dirección no numérica,
+y shutdown determinista con `stop()`. **Suite: 19 tests verdes.**
+
 ## Cómo correr
 
 ```bash

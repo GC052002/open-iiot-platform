@@ -330,7 +330,10 @@ envolver callbacks en `to_thread`). `paho` directo descartado en backend.
 | ¿Locking del TagCache? (Rev 4 · R3) | Lock por tag (fino) o copy-on-write; decisión documentada en `tag_cache.py`. |
 | ¿Deadband en el modelo `Tag`? (Rev 4 · R4) | **Desde F1**: `deadband: float=0.0`, `deadband_mode: Literal["abs","pct"]="abs"`. |
 | ¿`schema_version` cómo? (Rev 4 · R5) | Unión **discriminada** en `Project` desde F1, aunque solo exista v1. |
-| ¿`pymodbus` pinneado? (Rev 4 · R6) | **`pymodbus>=3.6,<4`** + simulador en fixture de pytest reutilizable. |
+| ¿`pymodbus` pinneado? (Rev 4 · R6) | **`pymodbus>=3.6,<3.9`** (3.9+ migra el datastore) + simulador en fixture de pytest. |
+| ¿Plantilla `read_block` en `BaseDriver`? (Rev 5 · D-M4) | **Diferida a F2**: se generaliza (`_group_for_protocol`/`_read_group`/`_decode`) cuando existan S7 y OPC UA reales; abstraer con un solo driver sería especulativo. |
+| ¿Timeout del cliente de driver? (Rev 5 · D-H2) | **Obligatorio**: todo driver de red acota timeout/retries para que el backoff del runtime se active ante un PLC caído. |
+| ¿`stop()` del runtime? (Rev 5 · R-H1) | Cancela las tareas del TaskGroup (no basta señalizar); `TaskGroup.cancel()` nativo llega en py3.13. |
 
 ---
 
