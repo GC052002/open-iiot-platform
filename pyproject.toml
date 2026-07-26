@@ -1,0 +1,48 @@
+[project]
+name = "iiot-platform-backend"
+version = "0.1.0"
+description = "Backend asíncrono (FastAPI + asyncio) para la plataforma IIoT Open Source"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+
+dependencies = [
+    "fastapi>=0.110,<1",
+    "uvicorn[standard]>=0.29,<1",
+    "pydantic>=2.6,<3",
+    # R6 (ARCHITECTURE §3.10): pin de pymodbus. Techo en <3.9: 3.9+ inicia la
+    # migración del datastore a SimData/SimDevice (rumbo a 4.0) y depreca la API
+    # clásica de servidor que usa el simulador. Se revisará al portar a 4.x.
+    "pymodbus>=3.6,<3.9",
+    "cryptography>=42",          # Fernet (cifrado de credenciales, §3.5)
+]
+
+[project.optional-dependencies]
+# Drivers adicionales — se activan en Fase 2 (ver ROADMAP.md).
+drivers = [
+    "python-snap7>=1.3",        # Siemens S7 (F2)
+    "asyncua>=1.1",             # OPC UA (F2)
+    "aiomqtt>=2.0",             # MQTT async nativo (F2, §11.2)
+]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "httpx>=0.27",              # TestClient / WS testing
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

@@ -1,0 +1,30 @@
+# docker-compose esqueleto — Fase 0/1 (ARCHITECTURE.md §7, modo air-gapped / single-worker)
+# Incluye un simulador Modbus TCP para validar el motor sin PLC físico (Rev 3 / R6).
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # La clave Fernet NUNCA se hornea en la imagen (§3.5 / §10.4).
+      # En dev se inyecta por env; en prod, vía SOPS+age / Vault.
+      IIOT_FERNET_KEY: "${IIOT_FERNET_KEY:-}"
+      IIOT_MODBUS_SIM_HOST: "modbus-sim"
+      IIOT_MODBUS_SIM_PORT: "5020"
+    depends_on:
+      - modbus-sim
+    # single-worker en air-gapped (Redis/multi-worker es F4, §10.1).
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  # Simulador Modbus TCP para desarrollo/CI (R6). Sustituible por diagslave.
+  modbus-sim:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "-m", "app.drivers.modbus_sim"]
+    environment:
+      IIOT_MODBUS_SIM_PORT: "5020"
+    ports:
+      - "5020:5020"
