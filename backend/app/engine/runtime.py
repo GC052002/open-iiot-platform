@@ -119,7 +119,12 @@ class Runtime:
 
 
 async def _safe_disconnect(driver: BaseDriver) -> None:
+    # BLOCKER 2 (Rev 6): al cancelar la tarea, un `await` normal en el finally
+    # lanzaría CancelledError de inmediato y el socket TCP no se cerraría (conexiones
+    # zombie en el PLC). `asyncio.shield` deja completar el cierre pese a la cancelación.
     try:
-        await driver.disconnect()
+        await asyncio.shield(driver.disconnect())
+    except asyncio.CancelledError:
+        pass  # cancelación esperada durante el cleanup; el socket ya se cerró
     except Exception:  # noqa: BLE001 - disconnect nunca debe propagar en cleanup
         log.debug("Error ignorado en disconnect de %s", driver.driver_type)

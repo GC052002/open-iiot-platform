@@ -5,7 +5,12 @@ import struct
 
 import pytest
 
-from app.drivers.modbus_driver import ModbusDriver, _decode, _register_count
+from app.drivers.modbus_driver import (
+    ModbusDriver,
+    _decode,
+    _group_contiguous_spans,
+    _register_count,
+)
 from app.engine.runtime import Runtime
 from app.models.node import DriverNode
 from app.models.project import ProjectV1
@@ -30,6 +35,33 @@ def test_decode_bool_and_int():
     assert _decode([1], Tag(id="b", name="b", driver_id="d1", address="0", data_type="bool")) is True
     assert _decode([0], Tag(id="b", name="b", driver_id="d1", address="0", data_type="bool")) is False
     assert _decode([42], Tag(id="i", name="i", driver_id="d1", address="0", data_type="int")) == 42
+
+
+# --- BLOCKER 1 (Rev 6): agrupación por spans, límite PDU, no partir floats --
+
+def _span(addr: int, width: int) -> tuple:
+    t = Tag(id=f"t{addr}", name="x", driver_id="d1", address=str(addr))
+    return (t, addr, width)
+
+
+def test_span_grouping_merges_and_respects_gap():
+    spans = [_span(0, 1), _span(1, 1), _span(5, 1)]
+    assert _group_contiguous_spans(spans) == [(0, 2), (5, 1)]
+
+
+def test_span_grouping_does_not_split_float():
+    # float en dirección 3 ocupa 3,4. No debe partirse aunque el límite sea pequeño.
+    spans = [_span(0, 1), _span(3, 2)]
+    ranges = _group_contiguous_spans(spans, max_registers=3)
+    # (0..0) cabe; (3..4) es un bloque entero, nunca (3,1)+(4,1).
+    assert (3, 2) in ranges
+
+
+def test_span_grouping_respects_pdu_limit():
+    spans = [_span(i, 1) for i in range(0, 200)]
+    ranges = _group_contiguous_spans(spans, max_registers=120)
+    assert all(count <= 120 for _start, count in ranges)
+    assert sum(count for _s, count in ranges) == 200  # cobertura completa
 
 
 # --- D-m2: dirección no numérica no rompe la lectura -----------------------

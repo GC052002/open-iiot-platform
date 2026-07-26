@@ -66,6 +66,33 @@ def _group_contiguous(addresses: list[int]) -> list[tuple[int, int]]:
     return ranges
 
 
+def _group_contiguous_spans(
+    spans: list[tuple[Tag, int, int]], max_registers: int = 120
+) -> list[tuple[int, int]]:
+    """Agrupa por spans `(tag, start, width)` sin partir un tag multiregistro entre
+    dos peticiones y respetando el límite de PDU Modbus (BLOCKER 1, Rev 6).
+
+    Modbus TCP admite <=125 registros por petición; se usa 120 de margen. Un `float`
+    (2 registros) nunca queda partido entre bloques (evita *tearing* temporal).
+    """
+    if not spans:
+        return []
+    ordered = sorted(spans, key=lambda s: s[1])
+    ranges: list[tuple[int, int]] = []
+    cur_start = ordered[0][1]
+    cur_end = cur_start + ordered[0][2]  # exclusivo
+    for _tag, start, width in ordered[1:]:
+        end = start + width
+        # Nuevo bloque si hay hueco o si extender superaría el límite de PDU.
+        if start > cur_end or (end - cur_start) > max_registers:
+            ranges.append((cur_start, cur_end - cur_start))
+            cur_start, cur_end = start, end
+        else:
+            cur_end = max(cur_end, end)
+    ranges.append((cur_start, cur_end - cur_start))
+    return ranges
+
+
 @register_driver("modbus_tcp")
 class ModbusDriver(BaseDriver):
     def __init__(self, node) -> None:  # type: ignore[no-untyped-def]
@@ -106,7 +133,6 @@ class ModbusDriver(BaseDriver):
         # 1) Resolver dirección base y ancho (registros) de cada tag; reunir todas
         #    las direcciones necesarias. Un float ocupa 2 registros (D-M3).
         spans: list[tuple[Tag, int, int]] = []  # (tag, start, width)
-        needed: set[int] = set()
         results: list[TagValue] = []
         for tag in tags:
             try:
@@ -115,13 +141,11 @@ class ModbusDriver(BaseDriver):
                 log.warning("Tag %s con dirección no numérica %r en Modbus", tag.id, tag.address)
                 results.append(TagValue(tag_id=tag.id, value=None, quality="bad"))
                 continue
-            width = _register_count(tag.data_type)
-            spans.append((tag, start, width))
-            needed.update(range(start, start + width))
+            spans.append((tag, start, _register_count(tag.data_type)))
 
-        # 2) Leer por rangos contiguos que cubran todas las direcciones necesarias.
+        # 2) Leer por bloques que respetan el límite de PDU y no parten spans (BLOCKER 1).
         registers: dict[int, int] = {}
-        for gstart, gcount in _group_contiguous(sorted(needed)):
+        for gstart, gcount in _group_contiguous_spans(spans):
             rr = await self._client.read_holding_registers(gstart, count=gcount, slave=self._unit)
             if rr.isError():
                 continue  # las direcciones ausentes se marcan bad abajo

@@ -105,9 +105,10 @@ class ConnectionManager:
         afecta a sí mismo."""
         while True:
             msg = await client.queue.get()
-            # Primero el dato; el overflow avisa de muestras ANTERIORES ya perdidas,
-            # así el orden es coherente para re-sincronización (W-M1).
-            await client.ws.send_text(msg.model_dump_json())
+            # Overflow ANTES del dato: cronológicamente el hueco ocurrió antes del
+            # siguiente punto; así una tendencia HMI/SCADA no interpola una recta
+            # sobre el gap (Rev 6, revierte W-M1 con justificación de integridad).
             if client.dropped:
                 await client.ws.send_text(OverflowMsg(dropped=client.dropped).model_dump_json())
                 client.dropped = 0
+            await client.ws.send_text(msg.model_dump_json())

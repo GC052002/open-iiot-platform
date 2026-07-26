@@ -73,6 +73,18 @@ lo pesado orientado a F2 se difiere de forma documentada.
 Tests añadidos (`test_rev5_fixes.py`): decode float/bool/int, dirección no numérica,
 y shutdown determinista con `stop()`. **Suite: 19 tests verdes.**
 
+## Rev 6 — Segunda revisión externa (Gemini + GLM), cierre de F1 · 2026-07-26
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| **BLOCKER 1** | modbus_driver.py | agrupación sin límite de PDU Modbus (>125 regs falla) y floats partidos entre peticiones (*tearing*) | ✅ `_group_contiguous_spans` (máx 120 regs, no parte spans) |
+| **BLOCKER 2** | runtime.py | al cancelar, el `disconnect` no cerraba el socket → conexiones zombie en el PLC | ✅ `asyncio.shield` en `_safe_disconnect` |
+| AJUSTE | ws/manager.py | orden del `OverflowMsg` | ✅ Revertido: overflow **antes** del dato (integridad cronológica de tendencias) |
+| Diferido F3 | models/tag.py | deadband pct con `previous==0` satura el WS | ⏳ TODO anotado (se resuelve con los LogicNode en F3) |
+
+Aceptado sin reabrir: `_notify` fuera del lock (T-M1), `TaskGroup`+`except*`+`_healthy`,
+uniones discriminadas Pydantic. **F1 cerrada — 22 tests verdes.**
+
 ## Cómo correr
 
 ```bash

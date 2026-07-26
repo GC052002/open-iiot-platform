@@ -59,6 +59,8 @@ class Tag(BaseModel):
 
         delta = abs(current - previous)
         if self.deadband_mode == "pct":
+            # TODO(F3): con previous==0 el umbral pct es 0 y el ruido cerca de cero
+            # satura el WS. Añadir un épsilon/suelo al implementar los LogicNode.
             threshold = abs(previous) * (self.deadband / 100.0)
         else:
             threshold = self.deadband
