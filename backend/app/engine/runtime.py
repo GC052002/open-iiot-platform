@@ -35,9 +35,13 @@ _BACKOFF_MAX = 30.0
 
 
 class Runtime:
-    def __init__(self, project: ProjectV1) -> None:
+    def __init__(self, project: ProjectV1, tag_cache: TagCache | None = None) -> None:
         self.project = project
-        self.tag_cache = TagCache({t.id: t for t in project.tags})
+        # Multi-tenant (Rev 7): el TagCache puede ser compartido entre proyectos;
+        # si no se inyecta, se crea uno propio. Cada proyecto tiene su Runtime (y por
+        # tanto su TaskGroup) para aislamiento de fallos (noisy-neighbor).
+        self.tag_cache = tag_cache if tag_cache is not None else TagCache()
+        self.tag_cache.set_tags(project.project_id, {t.id: t for t in project.tags})
         self.scheduler = ScanScheduler(project.tags)
         self._drivers: dict[str, BaseDriver] = {}
         self._stopping = asyncio.Event()
@@ -89,7 +93,7 @@ class Runtime:
                 while not self._stopping.is_set():
                     tags = self.scheduler.tags_for(node.id)
                     samples = await driver.read_block(tags)
-                    await self.tag_cache.update(samples)
+                    await self.tag_cache.update(self.project.project_id, samples)
                     # Sleep interrumpible por stop() (R-M1): shutdown determinista.
                     await self._sleep_or_stop(poll_rate)
             except asyncio.CancelledError:

@@ -1,14 +1,15 @@
 """`ConnectionManager` — broadcaster con backpressure (ARCHITECTURE §3.4, §4).
 
-Cada cliente tiene una `asyncio.Queue(maxsize=N)` acotada. Si la cola se llena
-(cliente lento por VPN, §3.4), se descarta la muestra **más vieja** y se avisa con
-un `OverflowMsg` — en telemetría, el último valor es el que importa.
+Multi-tenant (Rev 7): el manager es **global** y enruta por la clave compuesta
+`(project_id, tag_id)`, de modo que un cliente solo recibe los tags del proyecto al
+que está suscrito. El aislamiento de fallos vive en el `Runtime`/`TaskGroup` por
+proyecto, no aquí.
 
-Este manager es un **suscriptor del TagCache** (Observer): `on_tag_update` se
-registra vía `tag_cache.subscribe(...)`.
+Cada cliente tiene una `asyncio.Queue(maxsize=N)` acotada. Si se llena (cliente
+lento, §3.4), se descarta la muestra más vieja y se avisa con `OverflowMsg`.
 
-F1: manager local por proceso (single-worker). F3/F4 (§10.1): un `RedisBridge`
-reenviará entre workers; este manager no cambia, solo gana una fuente de eventos.
+Es un **suscriptor del TagCache** (Observer): `on_tag_update` se registra vía
+`tag_cache.subscribe(...)`.
 """
 
 from __future__ import annotations
@@ -26,6 +27,9 @@ log = logging.getLogger("iiot.ws")
 
 _QUEUE_MAXSIZE = 100
 
+# Clave de enrutado: (project_id, tag_id).
+SubKey = tuple[str, str]
+
 
 @dataclass
 class _Client:
@@ -33,14 +37,13 @@ class _Client:
     queue: asyncio.Queue[TagUpdateMsg] = field(
         default_factory=lambda: asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
     )
-    tag_ids: set[str] = field(default_factory=set)
+    keys: set[SubKey] = field(default_factory=set)
     dropped: int = 0
 
 
 class ConnectionManager:
     def __init__(self) -> None:
-        # tag_id -> clientes suscritos (routing selectivo).
-        self._subs: dict[str, set[_Client]] = {}
+        self._subs: dict[SubKey, set[_Client]] = {}
         self._clients: set[_Client] = set()
 
     # -- Ciclo de vida de la conexión ----------------------------------------
@@ -52,30 +55,34 @@ class ConnectionManager:
 
     def disconnect(self, client: _Client) -> None:
         self._clients.discard(client)
-        for tag_id in list(client.tag_ids):
-            self._subs.get(tag_id, set()).discard(client)
-        client.tag_ids.clear()  # evita que _enqueue siga enrutando aquí (W-m1)
-        # Vaciar la cola pendiente para liberar memoria de un cliente muerto.
+        for key in list(client.keys):
+            subs = self._subs.get(key)
+            if subs:
+                subs.discard(client)
+                if not subs:
+                    del self._subs[key]
+        client.keys.clear()  # evita que _enqueue siga enrutando aquí (W-m1)
         while not client.queue.empty():
             client.queue.get_nowait()
 
-    def subscribe(self, client: _Client, tag_ids: list[str]) -> None:
+    def subscribe(self, client: _Client, project_id: str, tag_ids: list[str]) -> None:
         for tag_id in tag_ids:
-            self._subs.setdefault(tag_id, set()).add(client)
-            client.tag_ids.add(tag_id)
+            key = (project_id, tag_id)
+            self._subs.setdefault(key, set()).add(client)
+            client.keys.add(key)
 
-    def unsubscribe(self, client: _Client, tag_ids: list[str]) -> None:
+    def unsubscribe(self, client: _Client, project_id: str, tag_ids: list[str]) -> None:
         for tag_id in tag_ids:
-            self._subs.get(tag_id, set()).discard(client)
-            client.tag_ids.discard(tag_id)
+            key = (project_id, tag_id)
+            self._subs.get(key, set()).discard(client)
+            client.keys.discard(key)
 
     # -- Suscriptor del TagCache (Observer) ----------------------------------
-    async def on_tag_update(self, changed: list[TagValue]) -> None:
-        """Enruta cada cambio a los clientes suscritos, con backpressure."""
-        # Agrupar por cliente para mandar un solo mensaje con sus tags.
+    async def on_tag_update(self, project_id: str, changed: list[TagValue]) -> None:
+        """Enruta cada cambio a los clientes suscritos a (project_id, tag_id)."""
         per_client: dict[_Client, list[TagValue]] = {}
         for value in changed:
-            for client in self._subs.get(value.tag_id, ()):  # type: ignore[arg-type]
+            for client in self._subs.get((project_id, value.tag_id), ()):  # type: ignore[arg-type]
                 per_client.setdefault(client, []).append(value)
 
         for client, values in per_client.items():
@@ -83,8 +90,7 @@ class ConnectionManager:
 
     def _enqueue(self, client: _Client, msg: TagUpdateMsg) -> None:
         # TODO(F2, W-M2): coalescing — fusionar valores con el último TagUpdateMsg en
-        # cola para no mandar N mensajes ante N cambios escalonados (overhead a 1000
-        # tags). Requiere un _last_msg por cliente; en F1 con el simulador no se nota.
+        # cola para no mandar N mensajes ante N cambios escalonados (overhead a 1000 tags).
         try:
             client.queue.put_nowait(msg)
         except asyncio.QueueFull:
@@ -101,13 +107,10 @@ class ConnectionManager:
 
     # -- Bucle de envío por cliente ------------------------------------------
     async def sender_loop(self, client: _Client) -> None:
-        """Vacía la cola del cliente hacia su WebSocket. Un cliente lento solo se
-        afecta a sí mismo."""
         while True:
             msg = await client.queue.get()
             # Overflow ANTES del dato: cronológicamente el hueco ocurrió antes del
-            # siguiente punto; así una tendencia HMI/SCADA no interpola una recta
-            # sobre el gap (Rev 6, revierte W-M1 con justificación de integridad).
+            # siguiente punto; una tendencia HMI no interpola sobre el gap (Rev 6).
             if client.dropped:
                 await client.ws.send_text(OverflowMsg(dropped=client.dropped).model_dump_json())
                 client.dropped = 0

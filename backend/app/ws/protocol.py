@@ -27,11 +27,13 @@ from app.models.tag import TagValue
 
 class SubscribeMsg(BaseModel):
     type: Literal["subscribe"] = "subscribe"
+    project_id: str = "default"  # Rev 7: scoping multi-tenant
     tag_ids: list[str]
 
 
 class UnsubscribeMsg(BaseModel):
     type: Literal["unsubscribe"] = "unsubscribe"
+    project_id: str = "default"
     tag_ids: list[str]
 
 
@@ -40,6 +42,7 @@ class WriteMsg(BaseModel):
     se aplican en el backend antes de encolar el Command (§3.6)."""
 
     type: Literal["write"] = "write"
+    project_id: str = "default"
     tag_id: str
     value: Any
     request_id: str | None = None
