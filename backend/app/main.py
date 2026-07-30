@@ -1,8 +1,8 @@
 """Aplicación FastAPI + lifespan del motor (ARCHITECTURE §5).
 
-F1 mínimo demostrable: cargar un proyecto JSON (POST /projects), arrancar el
-Runtime, y exponer un endpoint WebSocket que hace streaming de tags con el
-contrato de `ws/protocol.py`.
+Multi-tenant (Rev 7): carga N proyectos (POST /projects), cada uno con su Runtime;
+el WebSocket hace streaming por `(project_id, tag_id)` con el contrato de
+`ws/protocol.py`.
 """
 
 from __future__ import annotations
@@ -33,9 +33,8 @@ log = logging.getLogger("iiot.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # F1: sin proyecto al arranque; se carga vía POST /projects.
     yield
-    await state.stop_project()
+    await state.stop_all()
 
 
 app = FastAPI(title="IIoT Platform Backend", version="0.1.0", lifespan=lifespan)
@@ -44,10 +43,10 @@ app.include_router(api_router)
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    # R-M2: reflejar el estado real del runtime, no un "ok" fijo.
-    runtime_health = state.runtime.health() if state.runtime is not None else None
-    ok = runtime_health is None or runtime_health["healthy"]
-    return {"status": "ok" if ok else "degraded", "runtime": runtime_health}
+    # R-M2 + multi-tenant: estado real por proyecto.
+    per_project = state.health()
+    ok = all(h["healthy"] for h in per_project.values())
+    return {"status": "ok" if ok else "degraded", "projects": per_project}
 
 
 @app.websocket("/ws")
@@ -58,13 +57,12 @@ async def ws_endpoint(ws: WebSocket) -> None:
         async for raw in ws.iter_text():
             msg = ClientMessageAdapter.validate_json(raw)
             if isinstance(msg, SubscribeMsg):
-                state.manager.subscribe(client, msg.tag_ids)
-                if state.runtime is not None:
-                    snap = state.runtime.tag_cache.snapshot(msg.tag_ids)
-                    if snap:
-                        await ws.send_text(TagUpdateMsg(values=snap).model_dump_json())
+                state.manager.subscribe(client, msg.project_id, msg.tag_ids)
+                snap = state.tag_cache.snapshot(msg.project_id, msg.tag_ids)
+                if snap:
+                    await ws.send_text(TagUpdateMsg(values=snap).model_dump_json())
             elif isinstance(msg, UnsubscribeMsg):
-                state.manager.unsubscribe(client, msg.tag_ids)
+                state.manager.unsubscribe(client, msg.project_id, msg.tag_ids)
             elif isinstance(msg, WriteMsg):
                 ok, detail = await _handle_write(msg)
                 await ws.send_text(
@@ -80,11 +78,9 @@ async def ws_endpoint(ws: WebSocket) -> None:
 
 
 async def _handle_write(msg: WriteMsg) -> tuple[bool, str | None]:
-    # TODO(F2): aplicar RBAC/ABAC + audit log antes de ejecutar el Command (§3.6).
-    if state.runtime is None:
-        return False, "runtime no iniciado"
+    # TODO(F2.4): aplicar RBAC/ABAC + audit log antes de ejecutar el Command (§3.6).
     try:
-        ok = await state.runtime.write_tag(msg.tag_id, msg.value)
+        ok = await state.write_tag(msg.project_id, msg.tag_id, msg.value)
         return ok, None
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)

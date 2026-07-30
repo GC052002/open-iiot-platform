@@ -26,6 +26,9 @@ class Edge(BaseModel):
 
 class ProjectV1(BaseModel):
     schema_version: Literal["1"] = "1"
+    # project_id transversal (Rev 7): segmenta datos, tags y runtime por proyecto.
+    # Default "default" para compatibilidad con proyectos F1 sin el campo.
+    project_id: str = "default"
     name: str
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)

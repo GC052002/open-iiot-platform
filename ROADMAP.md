@@ -76,17 +76,23 @@ El corazón: productor/TagCache/consumer con **un** driver, end-to-end.
 - **Salida:** ✅ backend levanta, conecta al Modbus simulado y expone valores por API/WS.
 - **Modelo:** implementado por Opus; pendiente de revisión por GLM/Gemini. `[dep: F0]`
 
-### Fase 2 — Drivers reales + persistencia + observabilidad básica · *~4–5 j*
-- [ ] `drivers/s7_driver.py` (snap7 en thread pool) `[crítico: no bloquear loop]`
-- [ ] `drivers/opcua_driver.py` (asyncua subscriptions)
-- [ ] `drivers/mqtt_driver.py` (aiomqtt + TLS; flag `sparkplug` **diseñado**, impl. diferida)
-- [ ] `storage/` — Repository + SQLite; `TagBuffer` (batch writes)
-- [ ] `security/` — Fernet (clave externa vía env/SOPS) + RBAC básico + audit log
-- [ ] Motor de Alarmas (suscriptor) + notificación (Telegram/SMTP)
-- [ ] `observability/metrics.py` (Prometheus) + `health.py`
-- **Salida:** varios protocolos reales, histórico persistido, alarmas y métricas.
-- **Ejecución:** implementa Opus (atención especial a snap7/threading y seguridad);
-  revisan GLM/Gemini. `[dep: F1]`
+### Fase 2 — Drivers reales + persistencia + multi-tenant · *~5–6 j* (sub-fases)
+Partida en sub-pasos testeables (Rev 7 afinó el alcance con ingesta híbrida y
+multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
+
+- **F2.0 — Núcleo multi-tenant** ✅ **Completa (26 tests verdes)**
+  - [x] Orden temporal en `TagCache.update` (descarta out-of-order, Rev 7)
+  - [x] `project_id` transversal (`ProjectV1`) + `TagCache` segmentado por proyecto
+  - [x] `Runtime`/`TaskGroup` por `project_id` (aislamiento noisy-neighbor) vía `AppState`
+  - [x] `ConnectionManager` global enrutando por `(project_id, tag_id)`; API/WS project-aware
+- **F2.1 — Persistencia:** `storage/` Repository + SQLite; `TagBuffer` (batch, suscriptor Observer).
+- **F2.2 — Rama MQTT:** `drivers/mqtt_driver.py` (aiomqtt + TLS + **LWT → quality="bad"**,
+  respeta `ts` del Edge; flag `sparkplug` diseñado, impl. diferida).
+- **F2.3 — Drivers S7 + OPC UA:** snap7 en thread pool `[no bloquear loop]`, asyncua
+  subscriptions; aquí se eleva la plantilla `read_block` a `BaseDriver` (D-M4).
+- **F2.4 — Seguridad + valor añadido:** Fernet (clave externa) + RBAC + audit log;
+  Motor de Alarmas (suscriptor) + notificación; `observability/metrics.py` (Prometheus) + `health.py`.
+- **Ejecución:** implementa Opus (atención a snap7/threading y seguridad); revisan GLM/Gemini. `[dep: F1]`
 
 ### Fase 3 — Frontend (canvas HMI) · *~5–6 j*
 - [ ] Scaffold React + React Flow; paleta / canvas / inspector

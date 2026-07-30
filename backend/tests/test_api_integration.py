@@ -49,4 +49,4 @@ async def test_load_project_and_read_tags(modbus_sim_server):
             assert by_id["t0"]["quality"] == "good"
             assert by_id["t0"]["value"] is not None
         finally:
-            await state.stop_project()
+            await state.stop_all()

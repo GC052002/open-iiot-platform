@@ -85,6 +85,17 @@ y shutdown determinista con `stop()`. **Suite: 19 tests verdes.**
 Aceptado sin reabrir: `_notify` fuera del lock (T-M1), `TaskGroup`+`except*`+`_healthy`,
 uniones discriminadas Pydantic. **F1 cerrada — 22 tests verdes.**
 
+## Rev 8 — Revisión externa (Gemini + GLM) de F2.0 · 2026-07-30
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| **CRÍTICA** | tag_cache.py | orden temporal con `<=` descartaba polling de alta frecuencia con misma marca de reloj | ✅ Cambiado a `<` (solo estrictamente más viejo; deadband filtra el resto) |
+| Apunte F2.1 | tag_cache.py | un único `_notify` haría que el historiador perdiera intermedios (solo delta) | ✅ Interfaz preparada: suscriptores **delta** (WebSocket) vs **raw** (TagBuffer) |
+| Verificación | state.py | limpieza de referencias en `stop_project` | ✅ Confirmado: `pop` + `await task` + `drop_project` (sin fugas) |
+
+Aceptado sin cambios: aislamiento por `Runtime`/`TaskGroup` real; sin condiciones de
+carrera en `ConnectionManager` (event loop de un solo hilo). **F2.0 lista para merge — 27 tests verdes.**
+
 ## Cómo correr
 
 ```bash
