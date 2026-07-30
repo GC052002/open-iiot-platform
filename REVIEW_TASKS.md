@@ -119,6 +119,17 @@ merge — 35 tests verdes.**
 Aceptado sin cambios: unificación poll/push (`run` + connect/disconnect no-op),
 shutdown limpio (`async with Client`), backoff ante `MqttError`. **F2.2 lista para merge — 44 tests verdes.**
 
+## Rev 11 — Revisión externa (Gemini + GLM) de F2.3, previa a PLC real · 2026-07-30
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| **CRÍTICA** | s7_driver.py | bool leía siempre bit 0 → `DB1.DBX0.5` daría valor incorrecto | ✅ Direccionamiento S7 completo (`DBX byte.bit`, `DBB/DBW/DBD`); decode/write por bit (read-modify-write) |
+| **CRÍTICA** | opcua_driver.py | mapeo NodeId podía no coincidir con la forma canónica → datos ignorados en silencio | ✅ `_handle_map` se completa en `run()` con `node.nodeid.to_string()` canónico |
+| Mejora | plc_check.py | fallo de conexión sin pistas accionables | ✅ Mensajes por protocolo (S7: PUT/GET, DB no optimizado, rack/slot; OPC UA; Modbus; MQTT) |
+| Checklist | DEMO.md | requisitos TIA Portal para hardware real | ✅ DBs no optimizados, PUT/GET, rack/slot (1500=0/0), puertos 102/4840 |
+
+**F2.3 lista para PLC S7 físico — 55 tests verdes.**
+
 ## Cómo correr
 
 ```bash

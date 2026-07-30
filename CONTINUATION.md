@@ -23,10 +23,12 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 
 ## Estado actual (2026-07-30)
 
-- **F0** ✅ · **F1** ✅ · **F2.0** ✅ · **F2.1** ✅ · **F2.2** ✅ — **todo mergeado a `main`** (PRs #1–#7).
-- **Tests:** 44 verdes (`pytest -q`).
+- **F0** ✅ · **F1** ✅ · **F2.0** ✅ · **F2.1** ✅ · **F2.2** ✅ (en `main`) · **F2.3** ✅
+  (S7 + OPC UA, en la rama de trabajo pendiente de merge).
+- **Tests:** 52 verdes (`pytest -q`).
 - **Revisiones integradas:** Rev 1–10 (Gemini + GLM).
-- **Siguiente:** F2.3 — drivers S7 + OPC UA.
+- **Demo:** ver `DEMO.md` (Modbus + persistencia + API + WS, ruta reproducible).
+- **Siguiente:** F2.4 — seguridad (Fernet/RBAC/audit) + alarmas + métricas Prometheus.
 - **Ramas:** `main` tiene F0–F2.0; F2.1 está en `claude/open-iiot-platform-64k96b`.
   La rama de trabajo se reinicia desde `main` al empezar cada bloque nuevo.
 
@@ -44,25 +46,25 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 - `api/` — `POST /projects`, `GET /projects`, `GET /projects/{id}`, `GET /tags?project_id=`.
 - `main.py` — FastAPI + WS `/ws` + `/health` por proyecto.
 
-## Próximo paso: F2.3 — Drivers S7 + OPC UA
+## Próximo paso: F2.4 — Seguridad + valor añadido
 
-- `drivers/s7_driver.py` con **`python-snap7`** (síncrono → envolver en
-  `asyncio.to_thread`, §3.1) `[crítico: no bloquear el loop]`. Es un driver de
-  **polling**: implementa `read_block` (agrupa por `(db_number, start)` contiguo) y
-  usa el `run` por defecto.
-- `drivers/opcua_driver.py` con **`asyncua`**: driver **push** (sobrescribe `run`)
-  usando *subscriptions* del servidor OPC UA.
-- **Aquí se materializa el D-M4:** elevar el patrón `read_block` (agrupar → leer →
-  decodificar) a `BaseDriver` con piezas abstractas por protocolo, generalizando desde
-  Modbus + S7 (ya con 2 drivers reales, sin abstracción especulativa).
-- `pyproject.toml`: `python-snap7`, `asyncua` ya están en `[optional-dependencies].drivers`.
+- **Seguridad:** cifrado **Fernet** de credenciales (clave externa vía env/SOPS, §3.5/§10.4);
+  **RBAC** por proyecto (admin/engineer/operator/viewer) impuesto en el backend; **audit log**
+  transaccional de escrituras (quién/cuándo/anterior→nuevo) en el patrón Command (§3.6).
+- **Alarmas:** motor de alarmas como **suscriptor delta** del `TagCache` (evalúa umbrales)
+  + notificación (Telegram/SMTP).
+- **Observabilidad:** `observability/metrics.py` (Prometheus `/metrics`) + `health.py`
+  granular por driver.
+- **Deudas anotadas para F2.4:** escritura MQTT (RPC over MQTT, contrato ya en el docstring),
+  QoS/retained MQTT configurable, cap del buffer de reintento del `TagBuffer`.
 
-### Ya hecho (arquitectura relevante para F2.3)
-- **Unificación poll/push (F2.2):** `BaseDriver.run(publish, stopping)` — polling por
-  defecto (bucle `read_block`), push lo sobrescribe. El Runtime aporta `publish` y el
-  wrapper connect/backoff/disconnect. S7 = polling (default run); OPC UA = push (override).
-- **Ingesta híbrida (F2.2):** `drivers/mqtt_driver.py` publica al mismo `TagCache`;
-  respeta `ts` del Edge; LWT → `quality="bad"`. Import perezoso de `aiomqtt`.
+### Ya hecho (arquitectura relevante)
+- **Drivers (F2.3):** S7 (polling, snap7 en to_thread, `DB{n}.{offset}`) y OPC UA (push,
+  asyncua subscriptions). D-M4: agrupación por bloques en `drivers/blockutil.py` (Modbus+S7).
+- **Unificación poll/push (F2.2):** `BaseDriver.run(publish, stopping)`; el Runtime aporta
+  `publish` y el wrapper connect/backoff/disconnect.
+- **Ingesta híbrida (F2.2):** `mqtt_driver.py` publica al mismo `TagCache`; respeta `ts`
+  del Edge; LWT → bad; `device_topic_index` para múltiples Edge.
 - **Persistencia (F2.1):** `storage/` Repository + `SQLiteHistorian` (WAL) + `TagBuffer`
   raw (batch + retry). `GET /history`.
 

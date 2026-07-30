@@ -52,14 +52,14 @@ def test_span_grouping_merges_and_respects_gap():
 def test_span_grouping_does_not_split_float():
     # float en dirección 3 ocupa 3,4. No debe partirse aunque el límite sea pequeño.
     spans = [_span(0, 1), _span(3, 2)]
-    ranges = _group_contiguous_spans(spans, max_registers=3)
+    ranges = _group_contiguous_spans(spans, max_units=3)
     # (0..0) cabe; (3..4) es un bloque entero, nunca (3,1)+(4,1).
     assert (3, 2) in ranges
 
 
 def test_span_grouping_respects_pdu_limit():
     spans = [_span(i, 1) for i in range(0, 200)]
-    ranges = _group_contiguous_spans(spans, max_registers=120)
+    ranges = _group_contiguous_spans(spans, max_units=120)
     assert all(count <= 120 for _start, count in ranges)
     assert sum(count for _s, count in ranges) == 200  # cobertura completa
 

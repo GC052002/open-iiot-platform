@@ -66,31 +66,9 @@ def _group_contiguous(addresses: list[int]) -> list[tuple[int, int]]:
     return ranges
 
 
-def _group_contiguous_spans(
-    spans: list[tuple[Tag, int, int]], max_registers: int = 120
-) -> list[tuple[int, int]]:
-    """Agrupa por spans `(tag, start, width)` sin partir un tag multiregistro entre
-    dos peticiones y respetando el límite de PDU Modbus (BLOCKER 1, Rev 6).
-
-    Modbus TCP admite <=125 registros por petición; se usa 120 de margen. Un `float`
-    (2 registros) nunca queda partido entre bloques (evita *tearing* temporal).
-    """
-    if not spans:
-        return []
-    ordered = sorted(spans, key=lambda s: s[1])
-    ranges: list[tuple[int, int]] = []
-    cur_start = ordered[0][1]
-    cur_end = cur_start + ordered[0][2]  # exclusivo
-    for _tag, start, width in ordered[1:]:
-        end = start + width
-        # Nuevo bloque si hay hueco o si extender superaría el límite de PDU.
-        if start > cur_end or (end - cur_start) > max_registers:
-            ranges.append((cur_start, cur_end - cur_start))
-            cur_start, cur_end = start, end
-        else:
-            cur_end = max(cur_end, end)
-    ranges.append((cur_start, cur_end - cur_start))
-    return ranges
+# D-M4: la agrupación por bloques (límite PDU, sin partir spans) es compartida por
+# los drivers de polling. Se reexporta con el nombre previo para no romper tests.
+from app.drivers.blockutil import group_contiguous_spans as _group_contiguous_spans  # noqa: E402
 
 
 @register_driver("modbus_tcp")
