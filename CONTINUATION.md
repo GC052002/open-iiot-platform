@@ -23,10 +23,11 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 
 ## Estado actual (2026-07-30)
 
-- **F0** ✅ · **F1** ✅ (motor Modbus + WS, mergeado a main) · **F2.0** ✅ (núcleo multi-tenant)
-- **Tests:** 26 verdes (`pytest -q`).
-- **Ramas:** `main` tiene F0/F1 + docs; el trabajo de F2.0 está en
-  `claude/open-iiot-platform-64k96b` (pendiente de abrir/mergear PR si se desea).
+- **F0** ✅ · **F1** ✅ · **F2.0** ✅ — **todo mergeado a `main`** (PRs #1, #2, #3).
+- **Tests:** 27 verdes (`pytest -q`).
+- **Revisiones integradas:** Rev 1–8 (Gemini + GLM). F2.0 aprobada por revisión externa.
+- **Ramas:** `main` está al día; la rama de trabajo `claude/open-iiot-platform-64k96b`
+  se reinicia desde `main` al empezar cada bloque nuevo.
 
 ### Qué hay implementado (backend/app)
 - `models/` — `Tag` (deadband), nodos discriminados, `Project` (unión discriminada,
@@ -49,6 +50,8 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
   (particionado por `project_id` + `time`).
 - **`TagBuffer`**: suscriptor Observer del `TagCache` que acumula muestras y hace
   *flush* en batch (cada N s o M muestras) para no escribir 1 fila por lectura.
+  **La interfaz ya está lista (Rev 8):** suscribirse con `tag_cache.subscribe(cb, raw=True)`
+  para recibir TODAS las muestras válidas (no solo los deltas del WebSocket).
 - Config/RBAC/audit en PostgreSQL (RBAC completo es F2.4).
 
 ## Decisiones ya cerradas que F2 debe respetar (no re-decidir)
