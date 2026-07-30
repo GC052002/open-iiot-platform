@@ -85,7 +85,11 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
   - [x] `project_id` transversal (`ProjectV1`) + `TagCache` segmentado por proyecto
   - [x] `Runtime`/`TaskGroup` por `project_id` (aislamiento noisy-neighbor) vía `AppState`
   - [x] `ConnectionManager` global enrutando por `(project_id, tag_id)`; API/WS project-aware
-- **F2.1 — Persistencia:** `storage/` Repository + SQLite; `TagBuffer` (batch, suscriptor Observer).
+- **F2.1 — Persistencia** ✅ **Completa (33 tests verdes)**
+  - [x] `storage/` Repository abstracto + `SQLiteHistorian` (sqlite3 stdlib, air-gapped)
+  - [x] `TagBuffer` suscriptor **raw** con flush en batch (por tiempo o tamaño)
+  - [x] Endpoint `GET /history?project_id=&tag_id=&limit=` + wiring en `AppState` (startup/shutdown)
+  - *(TimescaleDB/PostgreSQL = misma interfaz Repository, otra implementación; F2.4+)*
 - **F2.2 — Rama MQTT:** `drivers/mqtt_driver.py` (aiomqtt + TLS + **LWT → quality="bad"**,
   respeta `ts` del Edge; flag `sparkplug` diseñado, impl. diferida).
 - **F2.3 — Drivers S7 + OPC UA:** snap7 en thread pool `[no bloquear loop]`, asyncua

@@ -9,12 +9,14 @@ driver descontrolado de un proyecto no afecte al event loop de otro. El
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass
 from typing import Any
 
 from app.engine.runtime import Runtime
 from app.engine.tag_cache import TagCache
 from app.models.project import ProjectV1
+from app.storage import HistorianRepository, SQLiteHistorian, TagBuffer
 from app.ws.manager import ConnectionManager
 
 
@@ -29,8 +31,31 @@ class AppState:
         self.tag_cache = TagCache()            # compartido entre proyectos
         self.manager = ConnectionManager()
         self._projects: dict[str, _RunningProject] = {}
-        # El manager es suscriptor único del TagCache (Observer).
+        self.repo: HistorianRepository | None = None
+        self.tag_buffer: TagBuffer | None = None
+        # El manager es suscriptor delta del TagCache (solo cambios → WebSocket).
         self.tag_cache.subscribe(self.manager.on_tag_update)
+
+    # -- Persistencia (F2.1) --------------------------------------------------
+    async def startup(self, repo: HistorianRepository | None = None) -> None:
+        """Arranca el historiador y el TagBuffer (suscriptor raw). Idempotente."""
+        if self.repo is not None:
+            return
+        self.repo = repo or SQLiteHistorian(os.environ.get("IIOT_DB_PATH", "iiot_history.db"))
+        await self.repo.init()
+        self.tag_buffer = TagBuffer(self.repo)
+        # raw=True: el historiador recibe todas las muestras válidas (Rev 8).
+        self.tag_cache.subscribe(self.tag_buffer.on_samples, raw=True)
+        self.tag_buffer.start()
+
+    async def shutdown(self) -> None:
+        await self.stop_all()
+        if self.tag_buffer is not None:
+            await self.tag_buffer.stop()
+            self.tag_buffer = None
+        if self.repo is not None:
+            await self.repo.close()
+            self.repo = None
 
     async def start_project(self, project: ProjectV1) -> None:
         """Arranca (o reinicia) un proyecto con su propio Runtime/TaskGroup."""

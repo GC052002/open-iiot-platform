@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Historiador SQLite generado en runtime (F2.1)
+*.db
+iiot_history.db
