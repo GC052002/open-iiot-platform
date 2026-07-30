@@ -35,6 +35,17 @@ _ADDR_RE = re.compile(r"^DB(\d+)\.(\d+)$")
 _S7_PDU_BYTES = 222  # margen conservador del PDU S7
 
 
+def _import_snap7_client():
+    """Importa la clase Client de python-snap7 de forma robusta entre versiones
+    (1.x expone `snap7.client.Client`; 2.x además `snap7.Client`)."""
+    try:
+        from snap7.client import Client  # 1.x y 2.x
+        return Client
+    except ImportError:  # pragma: no cover - depende de la versión instalada
+        from snap7 import Client  # type: ignore
+        return Client
+
+
 def _parse_addr(address: str) -> tuple[int, int] | None:
     """'DB1.4' -> (db=1, start_byte=4); None si el formato no es válido."""
     m = _ADDR_RE.match(address or "")
@@ -77,13 +88,11 @@ class S7Driver(BaseDriver):
         self._client: Any = None
 
     async def connect(self) -> None:
-        import snap7  # perezoso: solo si se usa el driver
-
+        client_cls = _import_snap7_client()  # perezoso + robusto entre versiones
         if self._client is None:
-            self._client = snap7.client.Client()
+            self._client = client_cls()
+        # connect() lanza excepción si falla (snap7); el Runtime aplicará backoff.
         await asyncio.to_thread(self._client.connect, self._host, self._rack, self._slot)
-        if not await asyncio.to_thread(self._client.get_connected):
-            raise ConnectionError(f"No se pudo conectar a S7 {self._host} r{self._rack}/s{self._slot}")
 
     async def disconnect(self) -> None:
         if self._client is not None:

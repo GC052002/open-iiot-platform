@@ -20,9 +20,10 @@ dependencies = [
 [project.optional-dependencies]
 # Drivers adicionales — se activan en Fase 2 (ver ROADMAP.md).
 drivers = [
-    "python-snap7>=1.3",        # Siemens S7 (F2)
-    "asyncua>=1.1",             # OPC UA (F2)
-    "aiomqtt>=2.0",             # MQTT async nativo (F2, §11.2)
+    # 2.x incluye los binarios nativos de snap7 (sin instalar libsnap7 en el SO).
+    "python-snap7>=2.0,<3",     # Siemens S7 (F2.3)
+    "asyncua>=1.1",             # OPC UA (F2.3)
+    "aiomqtt>=2.0",             # MQTT async nativo (F2.2, §11.2)
 ]
 dev = [
     "pytest>=8",
