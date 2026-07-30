@@ -106,10 +106,44 @@ red). Recomendación de diseño (a decidir en F3/F4, **no** improvisar):
 El `LogicNode` ya existe como nodo (patrón Strategy); lo que falta es **la política
 de ejecución segura**, que debe cerrarse como decisión de arquitectura antes de codificar.
 
+## Decisiones de diseño validadas (Gemini + GLM) — a implementar en F2/F3
+
+Revisión que valida la factibilidad y fija las decisiones para no chocar con esta
+visión al implementar S7 / OPC UA / MQTT en F2.
+
+### 1. Ingesta híbrida (MQTT + polling en el mismo `TagCache`)
+- **Timestamping:** el driver Modbus asigna `ts = utcnow()`; el driver **MQTT debe
+  respetar el `ts` inyectado por el Edge** (Node-RED), no re-sellarlo.
+- **Control de orden (out-of-order):** `TagCache.update` debe **descartar la muestra
+  si `incoming_ts <= current_cached_ts`**, para que un mensaje MQTT retrasado por red
+  no sobrescriba un valor más reciente. *(Cambio en el core en F2; hoy `update` no
+  compara timestamps.)*
+- **Calidad vía LWT:** al recibir el **MQTT LWT** de una IOT2050, el driver inyecta
+  `TagValue(quality="bad")` para todos los tags de ese Edge Node. El campo `quality`
+  ya existe desde F1.
+
+### 2. Multi-tenant (`project_id`)
+- **BD:** una única PostgreSQL + TimescaleDB con `project_id` en todas las tablas;
+  Timescale particiona nativamente por `project_id` + `time`. Sin BD físicas separadas.
+- **Runtime (memoria):** un único proceso FastAPI, con aislamiento **lógico**:
+  - **Namespacing** de claves del `TagCache` como `f"{project_id}:{tag_id}"`.
+  - **Aislamiento de fallos:** un **`asyncio.TaskGroup` independiente por `project_id`**,
+    para que un driver descontrolado de la Planta A (*noisy neighbor*) y su
+    `except* Exception` no afecten a la Planta B.
+  - El **`ConnectionManager` (WebSocket) es global**, enrutando por sesión + `project_id`.
+
+### 3. Sandbox del `LogicNode`
+- **`asteval`** para el ~90% de los nodos (escalado, deadband, unidades): seguro,
+  rápido, no bloquea el loop.
+- **Python "real":** se descartan subprocesos/contenedores Docker por su *cold start*
+  (cientos de ms) que rompe ciclos de control SCADA. Dirección preferida:
+  **WebAssembly (WASM vía Wasmer/Extism)** — aislamiento estricto de memoria/CPU con
+  arranque sub-milisegundo.
+
 ## Veredicto
 
-**Factible.** La arquitectura modular actual absorbe esta visión sin rediseño: la
-ingesta híbrida es una consecuencia natural del `TagCache` como punto de convergencia,
-y persistencia/RBAC/auditoría/LWT ya están en el roadmap (F2/F4). Los dos únicos
-puntos a cerrar con cuidado son `project_id` (esquema, bajo riesgo) y el **sandbox del
-`LogicNode`** (seguridad, requiere decisión de diseño explícita).
+**Factible y validado por Gemini + GLM.** La arquitectura modular absorbe esta visión
+sin rediseño de F1: la ingesta híbrida es consecuencia natural del `TagCache` como
+punto de convergencia. Las decisiones de arriba son la guía para F2/F3 — el único
+cambio que toca el core es el **control de orden temporal en `TagCache.update`**
+(§1), pequeño y localizado.
