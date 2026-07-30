@@ -5,6 +5,7 @@ Importar este paquete debe registrar los drivers built-in (efecto de importació
 """
 
 # Importar aquí cada driver built-in para que su @register_driver se ejecute.
-from app.drivers import modbus_driver  # noqa: F401
+# (mqtt_driver importa aiomqtt de forma perezosa, así este import no lo requiere.)
+from app.drivers import modbus_driver, mqtt_driver  # noqa: F401
 
-__all__ = ["modbus_driver"]
+__all__ = ["modbus_driver", "mqtt_driver"]

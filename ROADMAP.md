@@ -90,8 +90,13 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
   - [x] `TagBuffer` suscriptor **raw** con flush en batch (por tiempo o tamaño)
   - [x] Endpoint `GET /history?project_id=&tag_id=&limit=` + wiring en `AppState` (startup/shutdown)
   - *(TimescaleDB/PostgreSQL = misma interfaz Repository, otra implementación; F2.4+)*
-- **F2.2 — Rama MQTT:** `drivers/mqtt_driver.py` (aiomqtt + TLS + **LWT → quality="bad"**,
-  respeta `ts` del Edge; flag `sparkplug` diseñado, impl. diferida).
+- **F2.2 — Rama MQTT** ✅ **Completa (43 tests verdes)**
+  - [x] Unificación poll/push: `BaseDriver.run(publish, stopping)` (polling por defecto;
+        push lo sobrescribe) — el Runtime trata igual a Modbus y MQTT
+  - [x] `drivers/mqtt_driver.py` (aiomqtt, import perezoso): parsea JSON → `TagCache`,
+        **respeta el `ts` del Edge**, **LWT → `quality="bad"`**, flag `sparkplug` diseñado
+  - [x] Tests de parsing puros (mapeo por address, ts, LWT, no-JSON) sin broker
+  - *(TLS y escritura vía MQTT command topic → F2.4)*
 - **F2.3 — Drivers S7 + OPC UA:** snap7 en thread pool `[no bloquear loop]`, asyncua
   subscriptions; aquí se eleva la plantilla `read_block` a `BaseDriver` (D-M4).
 - **F2.4 — Seguridad + valor añadido:** Fernet (clave externa) + RBAC + audit log;
