@@ -23,11 +23,11 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 
 ## Estado actual (2026-07-30)
 
-- **F0** ✅ · **F1** ✅ · **F2.0** ✅ · **F2.1** ✅ · **F2.2** ✅ (en `main`) · **F2.3** ✅
-  (S7 + OPC UA, en la rama de trabajo pendiente de merge).
-- **Tests:** 52 verdes (`pytest -q`).
-- **Revisiones integradas:** Rev 1–10 (Gemini + GLM).
-- **Demo:** ver `DEMO.md` (Modbus + persistencia + API + WS, ruta reproducible).
+- **F0** ✅ · **F1** ✅ · **F2.0** ✅ · **F2.1** ✅ · **F2.2** ✅ · **F2.3** ✅ — **todo mergeado a `main`** (PRs #1–#9).
+- **Tests:** 55 verdes (`pytest -q`).
+- **Revisiones integradas:** Rev 1–11 (Gemini + GLM).
+- **Demo / PLC real:** ver `DEMO.md` (runbook S7/Modbus/OPC UA + checklist TIA Portal) y
+  el preflight `python -m app.tools.plc_check`.
 - **Siguiente:** F2.4 — seguridad (Fernet/RBAC/audit) + alarmas + métricas Prometheus.
 - **Ramas:** `main` tiene F0–F2.0; F2.1 está en `claude/open-iiot-platform-64k96b`.
   La rama de trabajo se reinicia desde `main` al empezar cada bloque nuevo.
