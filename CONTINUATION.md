@@ -23,11 +23,12 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 
 ## Estado actual (2026-07-30)
 
-- **F0** ✅ · **F1** ✅ · **F2.0** ✅ — **todo mergeado a `main`** (PRs #1, #2, #3).
-- **Tests:** 27 verdes (`pytest -q`).
-- **Revisiones integradas:** Rev 1–8 (Gemini + GLM). F2.0 aprobada por revisión externa.
-- **Ramas:** `main` está al día; la rama de trabajo `claude/open-iiot-platform-64k96b`
-  se reinicia desde `main` al empezar cada bloque nuevo.
+- **F0** ✅ · **F1** ✅ · **F2.0** ✅ (mergeadas a `main`) · **F2.1** ✅ (persistencia, en la
+  rama de trabajo pendiente de merge).
+- **Tests:** 33 verdes (`pytest -q`).
+- **Revisiones integradas:** Rev 1–8 (Gemini + GLM).
+- **Ramas:** `main` tiene F0–F2.0; F2.1 está en `claude/open-iiot-platform-64k96b`.
+  La rama de trabajo se reinicia desde `main` al empezar cada bloque nuevo.
 
 ### Qué hay implementado (backend/app)
 - `models/` — `Tag` (deadband), nodos discriminados, `Project` (unión discriminada,
@@ -43,16 +44,21 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 - `api/` — `POST /projects`, `GET /projects`, `GET /projects/{id}`, `GET /tags?project_id=`.
 - `main.py` — FastAPI + WS `/ws` + `/health` por proyecto.
 
-## Próximo paso: F2.1 — Persistencia
+## Próximo paso: F2.2 — Rama MQTT (ingesta híbrida)
 
-- `storage/` con patrón **Repository** (abstrae el motor de BD).
-- SQLite para air-gapped; PostgreSQL + **TimescaleDB** en despliegues con recursos
-  (particionado por `project_id` + `time`).
-- **`TagBuffer`**: suscriptor Observer del `TagCache` que acumula muestras y hace
-  *flush* en batch (cada N s o M muestras) para no escribir 1 fila por lectura.
-  **La interfaz ya está lista (Rev 8):** suscribirse con `tag_cache.subscribe(cb, raw=True)`
-  para recibir TODAS las muestras válidas (no solo los deltas del WebSocket).
-- Config/RBAC/audit en PostgreSQL (RBAC completo es F2.4).
+- `drivers/mqtt_driver.py` con **`aiomqtt`** (async nativo, §11.2): se suscribe al
+  broker local, parsea el payload JSON y llama `tag_cache.update(project_id, samples)`
+  igual que Modbus.
+- **Respetar el `ts` inyectado por el Edge** (Node-RED), no re-sellarlo (Rev 7).
+- **MQTT LWT → `quality="bad"`** para todos los tags del Edge Node al caer.
+- Flag `sparkplug` **diseñado** desde el inicio; implementación Protobuf diferida (F4).
+- Añadir `aiomqtt` a `pyproject.toml [project.optional-dependencies].drivers`.
+
+### Ya hecho en F2.1 (persistencia)
+- `storage/`: `HistorianRepository` (abstracto) + `SQLiteHistorian` (sqlite3 stdlib).
+- `TagBuffer`: suscriptor **raw** (`subscribe(cb, raw=True)`), flush en batch.
+- `GET /history?project_id=&tag_id=&limit=`; `AppState.startup/shutdown` en el lifespan.
+- Nota: TimescaleDB/PostgreSQL = misma interfaz Repository, otra implementación.
 
 ## Decisiones ya cerradas que F2 debe respetar (no re-decidir)
 

@@ -46,6 +46,14 @@ async def get_project(project_id: str) -> dict[str, Any]:
     return runtime.project.model_dump()
 
 
+@router.get("/history")
+async def history(project_id: str, tag_id: str, limit: int = 1000) -> list[dict[str, Any]]:
+    """Muestras históricas de un tag (ts desc). Persistidas por el TagBuffer (F2.1)."""
+    if state.repo is None:
+        return []
+    return await state.repo.query(project_id, tag_id, limit)
+
+
 @router.get("/tags")
 async def list_tags(project_id: str = "default") -> list[dict[str, Any]]:
     runtime = state.runtime(project_id)

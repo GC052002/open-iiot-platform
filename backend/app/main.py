@@ -33,8 +33,9 @@ log = logging.getLogger("iiot.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await state.startup()   # historiador + TagBuffer (F2.1)
     yield
-    await state.stop_all()
+    await state.shutdown()
 
 
 app = FastAPI(title="IIoT Platform Backend", version="0.1.0", lifespan=lifespan)
