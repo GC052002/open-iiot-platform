@@ -16,7 +16,14 @@ Contrato de payload (JSON) que publica el Edge:
   o bien un objeto plano {"<address>": <valor>, ...} (sin ts => ts = ahora).
 El `address` de cada tag es su clave en el payload (como en Modbus, §3.2).
 
-Config del nodo: `host`, `port` (def. 1883), `topic` (def. "#"), `lwt_topic` (opc.).
+Múltiples Edge por un driver (Rev 10): con tópicos wildcard (p. ej.
+`iiot/edge/+/data`), dos Edge distintos pueden enviar la misma clave y cruzarse. Se
+resuelve con `device_topic_index`: el índice del segmento `device_id` en el tópico;
+entonces el `tag.address` se compara como `"{device_id}/{clave}"`. Si no se
+configura, se asume **1 Edge = 1 DriverNode** (comparación por clave plana).
+
+Config del nodo: `host`, `port` (def. 1883), `topic` (def. "#"), `lwt_topic` (opc.),
+`device_topic_index` (opc., int).
 """
 
 from __future__ import annotations
@@ -52,11 +59,20 @@ class MqttDriver(BaseDriver):
         self._port: int = int(self.config.get("port", 1883))
         self._topic: str = self.config.get("topic", "#")
         self._lwt_topic: str | None = self.config.get("lwt_topic")
+        self._device_topic_index: int | None = self.config.get("device_topic_index")
         self._sparkplug: bool = bool(self.config.get("sparkplug", False))  # impl. diferida (F4)
 
     def _address_map(self) -> dict[str, Any]:
-        """address (clave del payload) -> Tag."""
+        """address (clave del payload, posiblemente compuesta) -> Tag."""
         return {t.address: t for t in self._tags.values()}
+
+    def _device_id(self, topic: str) -> str | None:
+        """Extrae el device_id del tópico según `device_topic_index` (Rev 10)."""
+        if self._device_topic_index is None:
+            return None
+        parts = topic.split("/")
+        idx = self._device_topic_index
+        return parts[idx] if 0 <= idx < len(parts) else None
 
     def parse(self, topic: str, payload: bytes | str) -> list[TagValue]:
         """Traduce un mensaje MQTT a muestras. Función pura y testeable (sin red)."""
@@ -77,10 +93,15 @@ class MqttDriver(BaseDriver):
         if not isinstance(values, dict):
             return []
 
+        device_id = self._device_id(topic)
         amap = self._address_map()
         out: list[TagValue] = []
         for key, val in values.items():
-            tag = amap.get(key)
+            # Preferir la clave compuesta '{device_id}/{key}' para aislar el origen
+            # (Rev 10); si no, la clave plana (1 Edge = 1 driver).
+            tag = amap.get(f"{device_id}/{key}") if device_id is not None else None
+            if tag is None:
+                tag = amap.get(key)
             if tag is None:
                 continue
             kwargs = {"ts": ts} if ts is not None else {}
@@ -92,9 +113,12 @@ class MqttDriver(BaseDriver):
         import aiomqtt
 
         async with aiomqtt.Client(hostname=self._host, port=self._port) as client:
-            await client.subscribe(self._topic)
+            # QoS 1 (Rev 10): entrega garantizada para telemetría industrial.
+            # TODO(F2.4): política de mensajes retained (evitar datos obsoletos al
+            # arrancar) y QoS configurable por nodo.
+            await client.subscribe(self._topic, qos=1)
             if self._lwt_topic is not None:
-                await client.subscribe(self._lwt_topic)
+                await client.subscribe(self._lwt_topic, qos=1)
             async for message in client.messages:
                 if stopping.is_set():
                     break
@@ -103,5 +127,8 @@ class MqttDriver(BaseDriver):
                     await publish(samples)
 
     async def write_tag(self, tag_id: str, value: Any) -> bool:
-        # TODO(F2.4): publicar a un topic de comando del Edge (Node-RED lo aplica al PLC).
+        # TODO(F2.4): patrón Comando/Respuesta (RPC over MQTT), contrato acordado (Rev 10):
+        #   topic:   iiot/edge/{device_id}/command/{tag_id}
+        #   payload: {"request_id": "<uuid>", "value": <v>, "ts": "<ISO8601>"}
+        #   + suscripción a un topic de acknowledgment con timeout para validar en campo.
         raise NotImplementedError("Escritura vía MQTT pendiente (F2.4)")

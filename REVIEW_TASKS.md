@@ -108,6 +108,17 @@ Aceptado sin cambios: `ts` ISO8601 texto (ordenable, migra a `TIMESTAMPTZ` en F2
 interfaz `Repository` suficiente para enchufar `TimescaleHistorian`. **F2.1 lista para
 merge — 35 tests verdes.**
 
+## Rev 10 — Revisión externa (Gemini) de F2.2 · 2026-07-30
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| MEDIA | mqtt_driver.py | wildcard + múltiples Edge con la misma clave se cruzaban | ✅ `device_topic_index` → mapeo compuesto `{device_id}/{clave}` (fallback plano = 1 Edge/driver) |
+| BAJA | mqtt_driver.py | QoS 0 por defecto (telemetría industrial) | ✅ `subscribe(..., qos=1)`; retained/QoS configurable → TODO F2.4 |
+| F2.4 | mqtt_driver.py | contrato de escritura MQTT | ✅ Documentado: RPC over MQTT `iiot/edge/{device_id}/command/{tag_id}` + ack con timeout |
+
+Aceptado sin cambios: unificación poll/push (`run` + connect/disconnect no-op),
+shutdown limpio (`async with Client`), backoff ante `MqttError`. **F2.2 lista para merge — 44 tests verdes.**
+
 ## Cómo correr
 
 ```bash

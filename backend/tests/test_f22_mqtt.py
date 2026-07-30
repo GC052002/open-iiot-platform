@@ -59,6 +59,21 @@ def test_lwt_marks_all_tags_bad():
     assert all(s.quality == "bad" and s.value is None for s in samples)
 
 
+def test_multi_edge_isolation_by_device_id():
+    # Rev 10: con device_topic_index, dos Edge con la misma clave no se cruzan.
+    node = DriverNode(id="m1", driver_type="mqtt",
+                      config={"topic": "iiot/edge/+/data", "device_topic_index": 2})
+    d = MqttDriver(node)
+    d.bind_tags([
+        Tag(id="a_temp", name="A temp", driver_id="m1", address="edge_01/temp"),
+        Tag(id="b_temp", name="B temp", driver_id="m1", address="edge_02/temp"),
+    ])
+    a = d.parse("iiot/edge/edge_01/data", b'{"values": {"temp": 20}}')
+    b = d.parse("iiot/edge/edge_02/data", b'{"values": {"temp": 99}}')
+    assert [s.tag_id for s in a] == ["a_temp"] and a[0].value == 20
+    assert [s.tag_id for s in b] == ["b_temp"] and b[0].value == 99
+
+
 def test_non_json_payload_is_ignored():
     d = _driver()
     assert d.parse("plantA/data", b"not-json") == []
