@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IIoT Platform — Monitor en vivo</title>
+<style>
+  :root { --bg:#0e1116; --panel:#171b22; --line:#232a34; --txt:#e6edf3; --muted:#8b949e;
+          --good:#2ea043; --bad:#f85149; --unc:#d29922; --accent:#2f81f7; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--txt); }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex;
+           align-items:center; gap:16px; flex-wrap:wrap; background:var(--panel); }
+  header h1 { font-size:16px; margin:0; font-weight:600; letter-spacing:.3px; }
+  header .spacer { flex:1; }
+  label { color:var(--muted); font-size:13px; }
+  input { background:#0d1117; border:1px solid var(--line); color:var(--txt);
+          padding:7px 10px; border-radius:7px; font-size:14px; }
+  button { background:var(--accent); color:#fff; border:0; padding:8px 14px;
+           border-radius:7px; font-size:14px; cursor:pointer; }
+  button.sec { background:#21262d; }
+  #status { font-size:13px; padding:4px 10px; border-radius:20px; border:1px solid var(--line); }
+  .on { color:var(--good); } .off { color:var(--bad); }
+  main { padding:20px; }
+  table { width:100%; border-collapse:collapse; background:var(--panel);
+          border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th, td { text-align:left; padding:12px 14px; border-bottom:1px solid var(--line); font-size:14px; }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.5px; }
+  tr:last-child td { border-bottom:0; }
+  .val { font-variant-numeric:tabular-nums; font-weight:600; font-size:16px; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:20px; font-weight:600; }
+  .b-good { background:rgba(46,160,67,.15); color:var(--good); }
+  .b-bad  { background:rgba(248,81,73,.15);  color:var(--bad); }
+  .b-uncertain { background:rgba(210,153,34,.15); color:var(--unc); }
+  .ts { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+  canvas { display:block; }
+  .empty { color:var(--muted); padding:24px; text-align:center; }
+  .note { color:var(--muted); font-size:12px; margin-top:12px; }
+  .flash { animation:fl .6s; }
+  @keyframes fl { from { background:rgba(47,129,247,.18);} to { background:transparent; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚙️ IIoT Platform — Monitor en vivo</h1>
+  <label>Proyecto <input id="project" value="planta_demo" size="14"></label>
+  <button id="connect">Conectar</button>
+  <button id="disconnect" class="sec">Detener</button>
+  <span class="spacer"></span>
+  <span id="status" class="off">● desconectado</span>
+</header>
+<main>
+  <table>
+    <thead><tr><th>Tag</th><th>Valor</th><th>Calidad</th><th>Tendencia</th><th>Última actualización</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="5" class="empty">Pulsa «Conectar» para suscribirte a los tags del proyecto.</td></tr></tbody>
+  </table>
+  <div class="note" id="info"></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+let ws = null, tags = {}, history = {}, dropped = 0;
+
+function setStatus(on, txt){ const el=$("#status"); el.className = on?"on":"off"; el.textContent = (on?"● ":"● ")+txt; }
+
+async function connect(){
+  disconnect();
+  const project = $("#project").value.trim() || "default";
+  let list = [];
+  try {
+    const r = await fetch(`/tags?project_id=${encodeURIComponent(project)}`);
+    list = await r.json();
+  } catch(e){ setStatus(false, "error /tags"); return; }
+  if(!list.length){ $("#rows").innerHTML = `<tr><td colspan="5" class="empty">No hay tags. ¿Cargaste el proyecto (POST /projects)?</td></tr>`; }
+  tags = {}; history = {};
+  $("#rows").innerHTML = list.map(t => rowHtml(t)).join("") || $("#rows").innerHTML;
+  list.forEach(t => { tags[t.id]=t; history[t.id]=[]; updateRow(t.id, t.value, t.quality); });
+
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onopen = () => { setStatus(true, "conectado"); ws.send(JSON.stringify({type:"subscribe", project_id:project, tag_ids:list.map(t=>t.id)})); };
+  ws.onclose = () => setStatus(false, "desconectado");
+  ws.onerror = () => setStatus(false, "error WS");
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if(m.type === "tag_update"){ m.values.forEach(v => updateRow(v.tag_id, v.value, v.quality, v.ts)); }
+    else if(m.type === "overflow"){ dropped += m.dropped; $("#info").textContent = `⚠ backpressure: ${dropped} muestras descartadas (cliente lento).`; }
+  };
+}
+function disconnect(){ if(ws){ ws.onclose=null; ws.close(); ws=null; } setStatus(false,"desconectado"); }
+
+function rowHtml(t){
+  return `<tr id="r-${t.id}">
+    <td>${escapeHtml(t.name||t.id)}<div class="ts">${escapeHtml(t.id)}</div></td>
+    <td class="val" id="v-${t.id}">—</td>
+    <td id="q-${t.id}"></td>
+    <td><canvas id="c-${t.id}" width="120" height="30"></canvas></td>
+    <td class="ts" id="t-${t.id}"></td></tr>`;
+}
+function updateRow(id, value, quality, ts){
+  const v=$("#v-"+id); if(!v) return;
+  v.textContent = (value===null||value===undefined) ? "—" : (typeof value==="number" ? (Number.isInteger(value)?value:value.toFixed(2)) : value);
+  v.classList.remove("flash"); void v.offsetWidth; v.classList.add("flash");
+  const q=$("#q-"+id); const cls = quality==="good"?"b-good":quality==="bad"?"b-bad":"b-uncertain";
+  q.innerHTML = `<span class="badge ${cls}">${quality||"—"}</span>`;
+  $("#t-"+id).textContent = ts ? new Date(ts).toLocaleTimeString() : new Date().toLocaleTimeString();
+  if(typeof value==="number"){ const h=history[id]||(history[id]=[]); h.push(value); if(h.length>40) h.shift(); spark(id,h); }
+}
+function spark(id, data){
+  const c=$("#c-"+id); if(!c) return; const ctx=c.getContext("2d"); const w=c.width,ht=c.height;
+  ctx.clearRect(0,0,w,ht); if(data.length<2) return;
+  const min=Math.min(...data), max=Math.max(...data), rng=(max-min)||1;
+  ctx.beginPath(); ctx.strokeStyle="#2f81f7"; ctx.lineWidth=1.5;
+  data.forEach((d,i)=>{ const x=i/(data.length-1)*w; const y=ht-((d-min)/rng)*(ht-6)-3; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.stroke();
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+$("#connect").onclick = connect;
+$("#disconnect").onclick = disconnect;
+</script>
+</body>
+</html>

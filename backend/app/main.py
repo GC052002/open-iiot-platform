@@ -10,10 +10,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import pathlib
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 
 import app.drivers  # noqa: F401 - efecto: registra los drivers built-in
 from app.api import router as api_router
@@ -40,6 +42,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="IIoT Platform Backend", version="0.1.0", lifespan=lifespan)
 app.include_router(api_router)
+
+
+_DASHBOARD = pathlib.Path(__file__).parent / "static" / "dashboard.html"
+
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard() -> str:
+    """Monitor web en vivo (autocontenido, sin CDNs). Para el frontend completo, F3."""
+    return _DASHBOARD.read_text(encoding="utf-8")
 
 
 @app.get("/health")
