@@ -65,10 +65,44 @@ async def _collect_push(driver: BaseDriver, seconds: float) -> list[TagValue]:
     return got
 
 
+_HINTS = {
+    "s7": [
+        "IP/ping al PLC y puerto 102/TCP abierto en el PC.",
+        "TIA Portal: CPU → Protección → habilitar 'acceso PUT/GET remoto'.",
+        "TIA Portal: el Data Block NO debe ser 'Optimized block access'.",
+        "rack/slot: S7-1200 = 0/1 ; S7-1500 = 0/0 ; S7-300/400 = 0/2.",
+    ],
+    "opcua": [
+        "URL del endpoint (opc.tcp://host:4840) y puerto 4840/TCP abierto.",
+        "El servidor debe permitir conexión anónima (o configurar credenciales).",
+        "NodeId correcto (ns=...;i=... o ns=...;s=...).",
+    ],
+    "modbus_tcp": [
+        "IP y puerto 502/TCP; unit/slave id correcto (--unit).",
+        "La dirección es el offset del Holding Register (0-based).",
+    ],
+    "mqtt": [
+        "Host del broker y puerto 1883; topic correcto (--topic).",
+        "¿El Edge (Node-RED) está publicando ya en ese topic?",
+    ],
+}
+
+
+def _print_hints(driver_type: str) -> None:
+    print(">> Verifica:")
+    for i, hint in enumerate(_HINTS.get(driver_type, []), 1):
+        print(f"   {i}) {hint}")
+
+
 async def run_check(args: argparse.Namespace) -> int:
     driver, tag = build_driver(args)
     print(f"→ Conectando driver '{args.type}' ...")
-    await driver.connect()
+    try:
+        await driver.connect()
+    except Exception as exc:  # noqa: BLE001 - preflight: reportar de forma accionable
+        print(f"✗ Fallo de conexión ({args.type}): {exc}")
+        _print_hints(args.type)
+        return 2
     print("  conectado.")
     try:
         try:

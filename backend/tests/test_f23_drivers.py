@@ -11,7 +11,7 @@ from app.drivers.s7_driver import (
     S7Driver,
     _decode_s7,
     _encode_s7,
-    _parse_addr,
+    _parse_s7,
     _s7_size,
 )
 from app.models.node import DriverNode
@@ -27,11 +27,15 @@ def test_drivers_registered():
 
 # --- S7: direccionamiento y codec (D-M4 comparte la agrupación) -------------
 
-def test_s7_parse_address():
-    assert _parse_addr("DB1.4") == (1, 4)
-    assert _parse_addr("DB10.0") == (10, 0)
-    assert _parse_addr("MW0") is None      # no es DB
-    assert _parse_addr("garbage") is None
+def test_s7_parse_address_forms():
+    # (db, offset, size, bit)
+    assert _parse_s7("DB1.4", "int") == (1, 4, 2, 0)      # simple, ancho por tipo
+    assert _parse_s7("DB1.DBX0.5", "bool") == (1, 0, 1, 5)  # bit 5 (Rev 11)
+    assert _parse_s7("DB1.DBD0", "float") == (1, 0, 4, 0)   # dword
+    assert _parse_s7("DB2.DBW2", "int") == (2, 2, 2, 0)     # word
+    assert _parse_s7("DB1.DBX0.9", "bool") is None          # bit fuera de 0-7
+    assert _parse_s7("MW0", "int") is None
+    assert _parse_s7("garbage", "int") is None
 
 
 def test_s7_sizes():
@@ -40,16 +44,17 @@ def test_s7_sizes():
     assert _s7_size("float") == 4
 
 
-def test_s7_decode_big_endian():
+def test_s7_decode_big_endian_and_bit():
     assert _decode_s7(struct.pack(">h", -12), "int") == -12
     assert abs(_decode_s7(struct.pack(">f", 3.5), "float") - 3.5) < 1e-6
-    assert _decode_s7(bytes([1]), "bool") is True
-    assert _decode_s7(bytes([0]), "bool") is False
+    # Bit correcto (Rev 11): byte 0b00100000 => bit 5 True, bit 0 False.
+    assert _decode_s7(bytes([0b0010_0000]), "bool", bit=5) is True
+    assert _decode_s7(bytes([0b0010_0000]), "bool", bit=0) is False
 
 
 def test_s7_encode_roundtrip():
-    for dt, val in [("int", 7), ("float", 2.5), ("bool", True)]:
-        assert _decode_s7(_encode_s7(val, dt), dt) == val or dt == "float"
+    assert _decode_s7(_encode_s7(7, "int"), "int") == 7
+    assert abs(_decode_s7(_encode_s7(2.5, "float"), "float") - 2.5) < 1e-6
 
 
 def test_s7_grouping_by_bytes_respects_pdu():
@@ -79,3 +84,11 @@ def test_opcua_to_sample_maps_known_node():
 def test_opcua_to_sample_ignores_unknown_node():
     d = _opcua_driver()
     assert d.to_sample("ns=9;i=99", 1.0) is None
+
+
+def test_opcua_canonical_nodeid_resolves(monkeypatch=None):
+    # Rev 11: aunque asyncua entregue una forma canónica distinta a la configurada,
+    # run() la registra en _handle_map. Simulamos esa inserción.
+    d = _opcua_driver()
+    d._handle_map["ns=2;i=3"] = "t0"  # forma canónica ya presente
+    assert d.to_sample("ns=2;i=3", 7).tag_id == "t0"

@@ -89,9 +89,24 @@ Tipos de dato: `bool`, `int` (S7 INT 16-bit / Modbus 1 registro), `float` (S7 RE
 - **Robustez:** reconexión con backoff, backpressure en WS, timeouts por driver.
 - **Calidad:** 54 tests verdes; cada fase revisada por revisores externos (Rev 1–10).
 
+## Checklist OBLIGATORIO en TIA Portal antes de la prueba S7 (verificar en el PLC)
+
+Requisitos de configuración del S7-1200/1500 (no son bugs de código, son ajustes del PLC):
+
+1. **DBs NO optimizados** — en propiedades del Data Block, **desmarcar** "Optimized block
+   access". Si está optimizado, el direccionamiento absoluto (`DB1.DBD0`) falla.
+2. **PUT/GET habilitado** — CPU → Protección/Seguridad → "Permitir acceso vía comunicación
+   PUT/GET del interlocutor remoto".
+3. **Rack/Slot** — S7-1200 = `rack 0 / slot 1`; **S7-1500 = `rack 0 / slot 0`**;
+   S7-300/400 = `rack 0 / slot 2`.
+4. **Firewall/red** — puertos abiertos en el PC del backend: **102/TCP** (S7) y **4840/TCP**
+   (OPC UA). Mismo segmento/VLAN OT que el PLC.
+
+Bool por bit (Rev 11): usa la notación Siemens `DB1.DBX0.5` (byte 0, bit 5). También
+`DB1.DBB0` (byte), `DB1.DBW2` (word/int), `DB1.DBD0` (dword/real).
+
 ## Notas de campo
 
-- Si el preflight S7 falla, prueba **rack 0 / slot 1** (S7-1200/1500) o **rack 0 / slot 2**
-  (S7-300/400). Habilita "PUT/GET" y accesos por DB no optimizados en el PLC si el DB no se lee.
+- Si el preflight falla, el propio comando imprime la lista de verificación anterior.
 - Modbus: si tu PLC expone *input registers* o *coils* en vez de *holding registers*, avísame
   — hoy el driver lee holding registers (lo más común); añadir tablas es trivial (F2.4).
