@@ -1,0 +1,79 @@
+"""Driver OPC UA — push vía subscriptions (F2.3).
+
+`asyncua` es async nativo. Es un driver **push**: sobrescribe `run`, crea una
+*subscription* en el servidor OPC UA y empuja cada cambio al TagCache (no hay
+polling, §3.9).
+
+Direccionamiento: `tag.address = NodeId` en formato asyncua, p. ej. `"ns=2;i=3"` o
+`"ns=2;s=Temperature"`.
+
+Config del nodo: `url` (p. ej. "opc.tcp://127.0.0.1:4840"), `period_ms` (def. 500).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Any
+
+from app.drivers.base import BaseDriver, Publish
+from app.drivers.registry import register_driver
+from app.models.tag import TagValue
+
+log = logging.getLogger("iiot.driver.opcua")
+
+
+class _SubHandler:
+    """Handler de asyncua: traduce cada cambio a una muestra y la publica."""
+
+    def __init__(self, driver: "OpcUaDriver", publish: Publish) -> None:
+        self._driver = driver
+        self._publish = publish
+
+    def datachange_notification(self, node, val, data) -> None:  # noqa: ANN001 - API asyncua
+        sample = self._driver.to_sample(node.nodeid.to_string(), val)
+        if sample is not None:
+            # El handler es síncrono; programamos la publicación en el loop.
+            asyncio.create_task(self._publish([sample]))
+
+
+@register_driver("opcua")
+class OpcUaDriver(BaseDriver):
+    def __init__(self, node) -> None:  # type: ignore[no-untyped-def]
+        super().__init__(node)
+        self._url: str = self.config.get("url", "opc.tcp://127.0.0.1:4840")
+        self._period_ms: int = int(self.config.get("period_ms", 500))
+
+    def _node_map(self) -> dict[str, Any]:
+        """NodeId (string) -> Tag."""
+        return {t.address: t for t in self._tags.values()}
+
+    def to_sample(self, node_id: str, value: Any) -> TagValue | None:
+        """Traduce (NodeId, valor) a TagValue. Función pura y testeable (sin servidor)."""
+        tag = self._node_map().get(node_id)
+        if tag is None:
+            return None
+        return TagValue(tag_id=tag.id, value=value, quality="good")
+
+    async def run(self, publish: Publish, stopping: asyncio.Event) -> None:
+        from asyncua import Client  # perezoso: solo si se usa el driver
+
+        node_ids = list(self._node_map())
+        async with Client(url=self._url) as client:
+            handler = _SubHandler(self, publish)
+            sub = await client.create_subscription(self._period_ms, handler)
+            nodes = [client.get_node(nid) for nid in node_ids]
+            if nodes:
+                await sub.subscribe_data_change(nodes)
+            await stopping.wait()  # mantener viva la suscripción hasta el shutdown
+            await sub.delete()
+
+    async def write_tag(self, tag_id: str, value: Any) -> bool:
+        from asyncua import Client
+
+        tag = self._tags.get(tag_id)
+        if tag is None:
+            raise KeyError(f"tag OPC UA no vinculado: {tag_id!r}")
+        async with Client(url=self._url) as client:
+            await client.get_node(tag.address).write_value(value)
+        return True

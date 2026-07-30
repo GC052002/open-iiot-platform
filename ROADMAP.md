@@ -97,8 +97,14 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
         **respeta el `ts` del Edge**, **LWT → `quality="bad"`**, flag `sparkplug` diseñado
   - [x] Tests de parsing puros (mapeo por address, ts, LWT, no-JSON) sin broker
   - *(TLS y escritura vía MQTT command topic → F2.4)*
-- **F2.3 — Drivers S7 + OPC UA:** snap7 en thread pool `[no bloquear loop]`, asyncua
-  subscriptions; aquí se eleva la plantilla `read_block` a `BaseDriver` (D-M4).
+- **F2.3 — Drivers S7 + OPC UA** ✅ **Completa (52 tests verdes)**
+  - [x] `drivers/s7_driver.py` (polling): `python-snap7` en `to_thread` (no bloquea el
+        loop), direcciones `DB{n}.{offset}`, decode/encode S7 big-endian, agrupación por DB
+  - [x] `drivers/opcua_driver.py` (push): `asyncua` subscriptions, mapeo NodeId→tag
+  - [x] **D-M4:** agrupación por bloques extraída a `blockutil.group_contiguous_spans`,
+        compartida por Modbus y S7
+  - [x] Tests puros (parseo/decode/encode/mapeo) sin PLC/servidor; `DEMO.md` para presentar
+  - *(prueba en vivo de S7/OPC UA requiere PLC/servidor real)*
 - **F2.4 — Seguridad + valor añadido:** Fernet (clave externa) + RBAC + audit log;
   Motor de Alarmas (suscriptor) + notificación; `observability/metrics.py` (Prometheus) + `health.py`.
 - **Ejecución:** implementa Opus (atención a snap7/threading y seguridad); revisan GLM/Gemini. `[dep: F1]`
