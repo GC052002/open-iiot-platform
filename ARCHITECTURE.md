@@ -334,7 +334,8 @@ envolver callbacks en `to_thread`). `paho` directo descartado en backend.
 | ¿Plantilla `read_block` en `BaseDriver`? (Rev 5 · D-M4) | **Diferida a F2**: se generaliza (`_group_for_protocol`/`_read_group`/`_decode`) cuando existan S7 y OPC UA reales; abstraer con un solo driver sería especulativo. |
 | ¿Timeout del cliente de driver? (Rev 5 · D-H2) | **Obligatorio**: todo driver de red acota timeout/retries para que el backoff del runtime se active ante un PLC caído. |
 | ¿`stop()` del runtime? (Rev 5 · R-H1) | Cancela las tareas del TaskGroup (no basta señalizar); `TaskGroup.cancel()` nativo llega en py3.13. |
-| ¿Ingesta híbrida MQTT+polling? (Rev 7, ver PROJECT_CONTEXT) | Mismo `TagCache`. F2: MQTT respeta el `ts` del Edge; `update` descarta si `incoming_ts <= cached_ts`; LWT → `quality="bad"`. |
+| ¿Ingesta híbrida MQTT+polling? (Rev 7/8) | Mismo `TagCache`. MQTT respeta el `ts` del Edge; `update` descarta si `incoming_ts < cached_ts` (`<`, Rev 8); LWT → `quality="bad"` (F2.2). |
+| ¿Suscriptores del `TagCache`? (Rev 8) | Dos tipos: **delta** (solo cambios, WebSocket) y **raw** (todas las válidas, `TagBuffer`/historiador F2.1). |
 | ¿Multi-tenant `project_id`? (Rev 7) | Una BD PG+Timescale particionada por `project_id`+`time`; un proceso FastAPI con `TagCache` namespaced `project_id:tag_id` y un `TaskGroup` por `project_id` (aislamiento de fallos). |
 | ¿Sandbox `LogicNode`? (Rev 7) | `asteval` para cálculos; **WASM** (Wasmer/Extism) para Python real (evita el cold-start de Docker que rompe ciclos SCADA). |
 

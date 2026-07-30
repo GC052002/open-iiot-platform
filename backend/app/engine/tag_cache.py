@@ -6,12 +6,14 @@ El cache está **segmentado por `project_id`** (equivalente a la clave namespace
 `project_id:tag_id`, implementado aquí como dict anidado por claridad). Así varios
 proyectos comparten una sola instancia sin colisiones.
 
-Orden temporal (Rev 7)
-----------------------
-`update` **descarta muestras out-of-order**: si `sample.ts <= última.ts` para ese
-tag, se ignora. Esto evita que un mensaje MQTT retrasado por la red (Rama 2)
-sobrescriba un valor más reciente. La Rama 1 (polling) asigna `ts` creciente; la
-Rama 2 debe respetar el `ts` inyectado por el Edge.
+Orden temporal (Rev 7 / Rev 8)
+------------------------------
+`update` **descarta muestras estrictamente más viejas**: si `sample.ts < última.ts`
+para ese tag, se ignora. Se usa `<` (no `<=`, Rev 8) para no descartar lecturas
+legítimas de polling de alta frecuencia que caen en el mismo timestamp por
+resolución del reloj; con `ts` igual se permite la actualización y el deadband
+filtra si el valor no cambió. Esto evita que un MQTT retrasado (Rama 2) sobrescriba
+un valor más reciente, siendo tolerante a ráfagas MQTT (QoS 1) con el mismo `ts`.
 
 Política de concurrencia (R3)
 -----------------------------
@@ -19,8 +21,11 @@ Reemplazo atómico de la entrada bajo `_write_lock` de grano fino. `get()`/`snap
 son seguros sin lock (single-loop, sin `await`). La notificación a suscriptores se
 hace FUERA del lock (T-M1) para que un suscriptor lento no bloquee a los writers.
 
-Es un **sujeto Observer**: notifica `(project_id, changed)` a sus suscriptores
-(Broadcaster en F1; Alarmas y TagBuffer en F2) solo ante cambios significativos.
+Es un **sujeto Observer** con dos tipos de suscriptor (Rev 8):
+- **delta**: recibe solo cambios significativos (superan deadband) — p. ej. el
+  Broadcaster WebSocket, que no debe saturar la red.
+- **raw**: recibe TODAS las muestras válidas post-orden-temporal — p. ej. el
+  `TagBuffer` historiador (F2.1), que persiste el dato crudo sin perder intermedios.
 """
 
 from __future__ import annotations
@@ -30,7 +35,7 @@ from typing import Awaitable, Callable
 
 from app.models.tag import Tag, TagValue
 
-# Un suscriptor recibe (project_id, muestras que cambiaron significativamente).
+# Un suscriptor recibe (project_id, muestras).
 Subscriber = Callable[[str, list[TagValue]], Awaitable[None]]
 
 
@@ -38,7 +43,8 @@ class TagCache:
     def __init__(self) -> None:
         self._tags: dict[str, dict[str, Tag]] = {}      # project_id -> tag_id -> Tag
         self._values: dict[str, dict[str, TagValue]] = {}  # project_id -> tag_id -> TagValue
-        self._subscribers: list[Subscriber] = []
+        self._delta_subs: list[Subscriber] = []  # solo cambios significativos
+        self._raw_subs: list[Subscriber] = []    # todas las muestras válidas
         self._write_lock = asyncio.Lock()
 
     # -- Configuración de tags ------------------------------------------------
@@ -55,14 +61,18 @@ class TagCache:
         self._values.pop(project_id, None)
 
     # -- Observer -------------------------------------------------------------
-    def subscribe(self, subscriber: Subscriber) -> None:
-        self._subscribers.append(subscriber)
+    def subscribe(self, subscriber: Subscriber, raw: bool = False) -> None:
+        """Registra un suscriptor. `raw=True` recibe todas las muestras válidas
+        (para persistencia); por defecto recibe solo cambios significativos (delta)."""
+        (self._raw_subs if raw else self._delta_subs).append(subscriber)
 
-    async def _notify(self, project_id: str, changed: list[TagValue]) -> None:
-        if not changed:
+    async def _notify(
+        self, subs: list[Subscriber], project_id: str, values: list[TagValue]
+    ) -> None:
+        if not values or not subs:
             return
         await asyncio.gather(
-            *(sub(project_id, changed) for sub in self._subscribers),
+            *(sub(project_id, values) for sub in subs),
             return_exceptions=True,
         )
 
@@ -83,15 +93,16 @@ class TagCache:
         Descarta out-of-order (Rev 7); reemplazo atómico bajo lock; notifica fuera
         del lock solo con cambios que superan el deadband.
         """
-        changed: list[TagValue] = []
+        changed: list[TagValue] = []   # significativos (delta)
+        valid: list[TagValue] = []     # todos los que pasan el orden temporal (raw)
         async with self._write_lock:
             proj_tags = self._tags.get(project_id, {})
             proj_vals = self._values.setdefault(project_id, {})
             for sample in samples:
                 previous = proj_vals.get(sample.tag_id)
 
-                # Orden temporal: ignorar muestras más viejas o iguales (Rev 7).
-                if previous is not None and sample.ts <= previous.ts:
+                # Orden temporal: ignorar solo muestras ESTRICTAMENTE más viejas (Rev 8).
+                if previous is not None and sample.ts < previous.ts:
                     continue
 
                 prev_value = previous.value if previous else None
@@ -101,8 +112,11 @@ class TagCache:
                     significant = tag.is_significant_change(prev_value, sample.value)
 
                 proj_vals[sample.tag_id] = sample
+                valid.append(sample)
                 if significant:
                     changed.append(sample)
 
-        await self._notify(project_id, changed)
+        # delta -> solo cambios; raw -> todas las válidas (para el historiador, F2.1).
+        await self._notify(self._delta_subs, project_id, changed)
+        await self._notify(self._raw_subs, project_id, valid)
         return changed

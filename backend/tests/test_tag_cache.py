@@ -80,10 +80,34 @@ async def test_out_of_order_sample_is_dropped():
     assert cache.snapshot(_P, ["t"])[0].value == 10.0     # no sobrescrito
 
 
-async def test_equal_timestamp_is_dropped():
+async def test_equal_timestamp_is_allowed():
+    # Rev 8: ts igual se PERMITE (polling de alta frecuencia con misma marca de reloj);
+    # el deadband filtra si el valor no cambió.
     cache = _cache(_tag("t", deadband=0.0))
     await cache.update(_P, [_tv("t", 10.0, 5)])
-    assert await cache.update(_P, [_tv("t", 11.0, 5)]) == []  # ts igual => se ignora
+    changed = await cache.update(_P, [_tv("t", 11.0, 5)])  # ts igual, valor distinto
+    assert len(changed) == 1
+    assert cache.snapshot(_P, ["t"])[0].value == 11.0
+
+
+async def test_raw_subscriber_gets_all_valid_samples():
+    # Rev 8: el suscriptor raw (historiador) recibe todo lo válido; el delta solo cambios.
+    cache = _cache(_tag("t", deadband=1.0))
+    delta: list = []
+    raw: list = []
+
+    async def on_delta(pid, values):
+        delta.extend(values)
+
+    async def on_raw(pid, values):
+        raw.extend(values)
+
+    cache.subscribe(on_delta)             # delta (default)
+    cache.subscribe(on_raw, raw=True)     # raw
+    await cache.update(_P, [_tv("t", 5.0, 0)])   # significativo
+    await cache.update(_P, [_tv("t", 5.1, 1)])   # < deadband: no es delta, pero sí raw
+    assert len(delta) == 1
+    assert len(raw) == 2
 
 
 # --- Rev 7: aislamiento por project_id -------------------------------------

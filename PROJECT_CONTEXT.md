@@ -114,10 +114,10 @@ visión al implementar S7 / OPC UA / MQTT en F2.
 ### 1. Ingesta híbrida (MQTT + polling en el mismo `TagCache`)
 - **Timestamping:** el driver Modbus asigna `ts = utcnow()`; el driver **MQTT debe
   respetar el `ts` inyectado por el Edge** (Node-RED), no re-sellarlo.
-- **Control de orden (out-of-order):** `TagCache.update` debe **descartar la muestra
-  si `incoming_ts <= current_cached_ts`**, para que un mensaje MQTT retrasado por red
-  no sobrescriba un valor más reciente. *(Cambio en el core en F2; hoy `update` no
-  compara timestamps.)*
+- **Control de orden (out-of-order):** `TagCache.update` descarta la muestra si
+  `incoming_ts < current_cached_ts` (estrictamente más vieja; `<` en vez de `<=`,
+  Rev 8, para no perder polling de alta frecuencia con la misma marca de reloj),
+  evitando que un MQTT retrasado sobrescriba un valor reciente. **✅ Implementado (F2.0).**
 - **Calidad vía LWT:** al recibir el **MQTT LWT** de una IOT2050, el driver inyecta
   `TagValue(quality="bad")` para todos los tags de ese Edge Node. El campo `quality`
   ya existe desde F1.
