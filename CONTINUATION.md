@@ -23,10 +23,10 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 
 ## Estado actual (2026-07-30)
 
-- **F0** ✅ · **F1** ✅ · **F2.0** ✅ (mergeadas a `main`) · **F2.1** ✅ (persistencia, en la
-  rama de trabajo pendiente de merge).
-- **Tests:** 33 verdes (`pytest -q`).
-- **Revisiones integradas:** Rev 1–8 (Gemini + GLM).
+- **F0** ✅ · **F1** ✅ · **F2.0** ✅ · **F2.1** ✅ — **todo mergeado a `main`** (PRs #1–#5).
+- **Tests:** 35 verdes (`pytest -q`).
+- **Revisiones integradas:** Rev 1–9 (Gemini + GLM).
+- **Siguiente:** F2.2 — rama MQTT (ingesta híbrida).
 - **Ramas:** `main` tiene F0–F2.0; F2.1 está en `claude/open-iiot-platform-64k96b`.
   La rama de trabajo se reinicia desde `main` al empezar cada bloque nuevo.
 
