@@ -47,11 +47,24 @@ class TagBuffer:
             batch = self._pending
             self._pending = defaultdict(list)
             self._count = 0
+
+        failed: dict[str, list[TagValue]] = {}
         for project_id, samples in batch.items():
             try:
                 await self._repo.insert(project_id, samples)
             except Exception:  # noqa: BLE001 - un fallo de BD no debe tumbar el motor
-                log.exception("Fallo al persistir batch de %s", project_id)
+                log.exception("Fallo al persistir batch de %s; se reintentará", project_id)
+                failed[project_id] = samples
+
+        # Rev 9: reencolar lo que falló (fallo transitorio de disco no debe perder
+        # telemetría). Se reinserta al principio para conservar el orden temporal.
+        if failed:
+            async with self._lock:
+                for project_id, samples in failed.items():
+                    self._pending[project_id] = samples + self._pending[project_id]
+                    self._count += len(samples)
+                # TODO(F2.4): acotar el buffer de reintento (cap + drop-oldest) para no
+                # crecer sin límite si la BD queda caída mucho tiempo.
 
     def start(self) -> None:
         if self._task is None:

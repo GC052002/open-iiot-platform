@@ -49,6 +49,9 @@ class SQLiteHistorian(HistorianRepository):
     async def init(self) -> None:
         def _open() -> sqlite3.Connection:
             conn = sqlite3.connect(self._db_path, check_same_thread=False)
+            # WAL (Rev 9): lecturas de /history no bloquean ni son bloqueadas por las
+            # escrituras batch del TagBuffer (evita 'database is locked' bajo carga).
+            conn.execute("PRAGMA journal_mode=WAL;")
             conn.executescript(_SCHEMA)
             conn.commit()
             return conn

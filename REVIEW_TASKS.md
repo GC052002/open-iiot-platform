@@ -96,6 +96,18 @@ uniones discriminadas Pydantic. **F1 cerrada — 22 tests verdes.**
 Aceptado sin cambios: aislamiento por `Runtime`/`TaskGroup` real; sin condiciones de
 carrera en `ConnectionManager` (event loop de un solo hilo). **F2.0 lista para merge — 27 tests verdes.**
 
+## Rev 9 — Revisión externa (Gemini) de F2.1 · 2026-07-30
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| MEDIA | sqlite_repository.py | lecturas de `/history` vs escrituras batch → `database is locked` | ✅ `PRAGMA journal_mode=WAL` en `init()` |
+| MEDIA | tag_buffer.py | un fallo transitorio de disco descartaba el batch (pérdida de telemetría) | ✅ Reencola el batch fallido (retry en el próximo flush; TODO cap en F2.4) |
+
+Aceptado sin cambios: `ts` ISO8601 texto (ordenable, migra a `TIMESTAMPTZ` en F2.4);
+índice `(project_id, tag_id, ts)`; diferir downsampling/retención a TimescaleDB;
+interfaz `Repository` suficiente para enchufar `TimescaleHistorian`. **F2.1 lista para
+merge — 35 tests verdes.**
+
 ## Cómo correr
 
 ```bash

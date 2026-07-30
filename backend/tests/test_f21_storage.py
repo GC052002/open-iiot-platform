@@ -51,6 +51,19 @@ async def test_sqlite_stores_text_values(tmp_path):
         await repo.close()
 
 
+async def test_sqlite_wal_mode_enabled(tmp_path):
+    # Rev 9: WAL activo para lecturas concurrentes no bloqueantes.
+    import sqlite3
+
+    repo = SQLiteHistorian(str(tmp_path / "h.db"))
+    await repo.init()
+    try:
+        mode = repo._conn.execute("PRAGMA journal_mode;").fetchone()[0]
+        assert mode.lower() == "wal"
+    finally:
+        await repo.close()
+
+
 # --- TagBuffer --------------------------------------------------------------
 
 class _FakeRepo:
@@ -61,6 +74,20 @@ class _FakeRepo:
         self.inserts.append((project_id, list(samples)))
 
 
+class _FlakyRepo:
+    """Falla las primeras `fail_times` inserciones, luego persiste."""
+
+    def __init__(self, fail_times: int):
+        self._fail = fail_times
+        self.saved: list = []
+
+    async def insert(self, project_id, samples):
+        if self._fail > 0:
+            self._fail -= 1
+            raise RuntimeError("disco temporalmente caído")
+        self.saved.extend(samples)
+
+
 async def test_tag_buffer_flushes_on_max_batch():
     repo = _FakeRepo()
     buf = TagBuffer(repo, flush_interval=999, max_batch=3)
@@ -69,6 +96,17 @@ async def test_tag_buffer_flushes_on_max_batch():
     await buf.on_samples("A", [_tv("t", 3, 2)])                  # 3 >= 3, flush
     assert len(repo.inserts) == 1
     assert len(repo.inserts[0][1]) == 3
+
+
+async def test_tag_buffer_retries_failed_batch_without_loss():
+    # Rev 9: un fallo transitorio de disco no debe perder telemetría.
+    repo = _FlakyRepo(fail_times=1)
+    buf = TagBuffer(repo, flush_interval=999, max_batch=1000)
+    await buf.on_samples("A", [_tv("t", 1, 0), _tv("t", 2, 1)])
+    await buf.flush()                 # falla -> reencola
+    assert repo.saved == []
+    await buf.flush()                 # reintento -> persiste
+    assert len(repo.saved) == 2       # ninguna muestra perdida
 
 
 async def test_tag_buffer_final_flush_on_stop():
