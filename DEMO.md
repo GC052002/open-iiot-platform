@@ -69,6 +69,16 @@ WebSocket en tiempo real → `ws://localhost:8000/ws`, enviar:
 ```
 Recibes `tag_update` a medida que el PLC cambia (con backpressure/`overflow`).
 
+## 4-bis. Interfaz visual para la presentación
+
+- **Monitor web en vivo** (incluido, sin CDNs): abre **`http://localhost:8000/`** en el
+  navegador, escribe el `project_id` (p. ej. `planta_real`) y pulsa *Conectar*. Verás una
+  tabla con **valor en vivo, calidad, mini-tendencia (sparkline) y última actualización**,
+  actualizándose por WebSocket. Es un monitor ligero para demo; el editor visual completo
+  (canvas HMI tipo WinCC/Node-RED) es la **Fase 3**.
+- **API interactiva (Swagger):** `http://localhost:8000/docs` — prueba todos los endpoints
+  desde el navegador (útil para mostrar la arquitectura REST).
+
 ## Direccionamiento por protocolo (referencia rápida)
 
 | Driver | `driver_type` | `address` | Config clave |
