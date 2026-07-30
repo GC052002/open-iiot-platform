@@ -23,10 +23,11 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 
 ## Estado actual (2026-07-30)
 
-- **F0** ✅ · **F1** ✅ · **F2.0** ✅ · **F2.1** ✅ — **todo mergeado a `main`** (PRs #1–#5).
-- **Tests:** 35 verdes (`pytest -q`).
+- **F0** ✅ · **F1** ✅ · **F2.0** ✅ · **F2.1** ✅ (en `main`) · **F2.2** ✅ (rama MQTT,
+  en la rama de trabajo pendiente de merge).
+- **Tests:** 43 verdes (`pytest -q`).
 - **Revisiones integradas:** Rev 1–9 (Gemini + GLM).
-- **Siguiente:** F2.2 — rama MQTT (ingesta híbrida).
+- **Siguiente:** F2.3 — drivers S7 + OPC UA.
 - **Ramas:** `main` tiene F0–F2.0; F2.1 está en `claude/open-iiot-platform-64k96b`.
   La rama de trabajo se reinicia desde `main` al empezar cada bloque nuevo.
 
@@ -44,21 +45,27 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 - `api/` — `POST /projects`, `GET /projects`, `GET /projects/{id}`, `GET /tags?project_id=`.
 - `main.py` — FastAPI + WS `/ws` + `/health` por proyecto.
 
-## Próximo paso: F2.2 — Rama MQTT (ingesta híbrida)
+## Próximo paso: F2.3 — Drivers S7 + OPC UA
 
-- `drivers/mqtt_driver.py` con **`aiomqtt`** (async nativo, §11.2): se suscribe al
-  broker local, parsea el payload JSON y llama `tag_cache.update(project_id, samples)`
-  igual que Modbus.
-- **Respetar el `ts` inyectado por el Edge** (Node-RED), no re-sellarlo (Rev 7).
-- **MQTT LWT → `quality="bad"`** para todos los tags del Edge Node al caer.
-- Flag `sparkplug` **diseñado** desde el inicio; implementación Protobuf diferida (F4).
-- Añadir `aiomqtt` a `pyproject.toml [project.optional-dependencies].drivers`.
+- `drivers/s7_driver.py` con **`python-snap7`** (síncrono → envolver en
+  `asyncio.to_thread`, §3.1) `[crítico: no bloquear el loop]`. Es un driver de
+  **polling**: implementa `read_block` (agrupa por `(db_number, start)` contiguo) y
+  usa el `run` por defecto.
+- `drivers/opcua_driver.py` con **`asyncua`**: driver **push** (sobrescribe `run`)
+  usando *subscriptions* del servidor OPC UA.
+- **Aquí se materializa el D-M4:** elevar el patrón `read_block` (agrupar → leer →
+  decodificar) a `BaseDriver` con piezas abstractas por protocolo, generalizando desde
+  Modbus + S7 (ya con 2 drivers reales, sin abstracción especulativa).
+- `pyproject.toml`: `python-snap7`, `asyncua` ya están en `[optional-dependencies].drivers`.
 
-### Ya hecho en F2.1 (persistencia)
-- `storage/`: `HistorianRepository` (abstracto) + `SQLiteHistorian` (sqlite3 stdlib).
-- `TagBuffer`: suscriptor **raw** (`subscribe(cb, raw=True)`), flush en batch.
-- `GET /history?project_id=&tag_id=&limit=`; `AppState.startup/shutdown` en el lifespan.
-- Nota: TimescaleDB/PostgreSQL = misma interfaz Repository, otra implementación.
+### Ya hecho (arquitectura relevante para F2.3)
+- **Unificación poll/push (F2.2):** `BaseDriver.run(publish, stopping)` — polling por
+  defecto (bucle `read_block`), push lo sobrescribe. El Runtime aporta `publish` y el
+  wrapper connect/backoff/disconnect. S7 = polling (default run); OPC UA = push (override).
+- **Ingesta híbrida (F2.2):** `drivers/mqtt_driver.py` publica al mismo `TagCache`;
+  respeta `ts` del Edge; LWT → `quality="bad"`. Import perezoso de `aiomqtt`.
+- **Persistencia (F2.1):** `storage/` Repository + `SQLiteHistorian` (WAL) + `TagBuffer`
+  raw (batch + retry). `GET /history`.
 
 ## Decisiones ya cerradas que F2 debe respetar (no re-decidir)
 

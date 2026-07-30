@@ -26,6 +26,7 @@ from app.engine.scan_scheduler import ScanScheduler
 from app.engine.tag_cache import TagCache
 from app.models.node import DriverNode
 from app.models.project import ProjectV1
+from app.models.tag import TagValue
 
 log = logging.getLogger("iiot.runtime")
 
@@ -78,24 +79,22 @@ class Runtime:
     def health(self) -> dict[str, Any]:
         return {"healthy": self._healthy, "drivers": sorted(self._drivers)}
 
-    # -- Scan loop por driver -------------------------------------------------
+    # -- Loop por driver (polling o push, unificado por driver.run) -----------
     async def _driver_scan_loop(self, node: DriverNode) -> None:
-        poll_rate = float(node.config.get("polling_rate", 1.0))
         backoff = _BACKOFF_START
         driver = create_driver(node)
         driver.bind_tags(self.scheduler.tags_for(node.id))
         self._drivers[node.id] = driver
 
+        async def publish(samples: list[TagValue]) -> None:
+            await self.tag_cache.update(self.project.project_id, samples)
+
         while not self._stopping.is_set():
             try:
                 await driver.connect()
                 backoff = _BACKOFF_START  # conexión OK: resetea el backoff
-                while not self._stopping.is_set():
-                    tags = self.scheduler.tags_for(node.id)
-                    samples = await driver.read_block(tags)
-                    await self.tag_cache.update(self.project.project_id, samples)
-                    # Sleep interrumpible por stop() (R-M1): shutdown determinista.
-                    await self._sleep_or_stop(poll_rate)
+                # run() bloquea hasta stop (polling) o hasta error/desconexión (push).
+                await driver.run(publish, self._stopping)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # reconexión con backoff, sin tumbar el resto
