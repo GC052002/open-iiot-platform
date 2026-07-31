@@ -28,6 +28,17 @@ CREATE TABLE IF NOT EXISTS samples (
     quality    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_samples_ptt ON samples (project_id, tag_id, ts);
+
+CREATE TABLE IF NOT EXISTS audit (
+    ts         TEXT NOT NULL,
+    username   TEXT,
+    action     TEXT NOT NULL,
+    project_id TEXT,
+    detail     TEXT,
+    old_value  TEXT,
+    new_value  TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_audit_ts ON audit (ts);
 """
 
 
@@ -96,6 +107,52 @@ class SQLiteHistorian(HistorianRepository):
         for ts, vnum, vtext, quality in cur.fetchall():
             out.append({"ts": ts, "value": vtext if vtext is not None else vnum, "quality": quality})
         return out
+
+    # -- Audit log (F2.4b) ----------------------------------------------------
+    async def record_audit(self, entry: dict[str, Any]) -> None:
+        if self._conn is None:
+            return
+        from datetime import datetime, timezone
+
+        row = (
+            entry.get("ts") or datetime.now(timezone.utc).isoformat(),
+            entry.get("username"),
+            entry["action"],
+            entry.get("project_id"),
+            entry.get("detail"),
+            None if entry.get("old_value") is None else str(entry.get("old_value")),
+            None if entry.get("new_value") is None else str(entry.get("new_value")),
+        )
+        async with self._lock:
+            await asyncio.to_thread(self._audit_sync, row)
+
+    def _audit_sync(self, row: tuple) -> None:
+        assert self._conn is not None
+        self._conn.execute(
+            "INSERT INTO audit (ts, username, action, project_id, detail, old_value, new_value) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            row,
+        )
+        self._conn.commit()
+
+    async def query_audit(self, project_id: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+        if self._conn is None:
+            return []
+        async with self._lock:
+            return await asyncio.to_thread(self._query_audit_sync, project_id, limit)
+
+    def _query_audit_sync(self, project_id: str | None, limit: int) -> list[dict[str, Any]]:
+        assert self._conn is not None
+        if project_id is None:
+            cur = self._conn.execute(
+                "SELECT ts, username, action, project_id, detail, old_value, new_value "
+                "FROM audit ORDER BY ts DESC LIMIT ?", (limit,))
+        else:
+            cur = self._conn.execute(
+                "SELECT ts, username, action, project_id, detail, old_value, new_value "
+                "FROM audit WHERE project_id = ? ORDER BY ts DESC LIMIT ?", (project_id, limit))
+        cols = ["ts", "username", "action", "project_id", "detail", "old_value", "new_value"]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
 
     async def close(self) -> None:
         if self._conn is not None:

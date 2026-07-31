@@ -46,6 +46,7 @@ class WriteMsg(BaseModel):
     tag_id: str
     value: Any
     request_id: str | None = None
+    token: str | None = None  # F2.4b: token de sesión para autorizar la escritura
 
 
 ClientMessage = Annotated[

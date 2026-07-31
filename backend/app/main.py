@@ -90,9 +90,26 @@ async def ws_endpoint(ws: WebSocket) -> None:
 
 
 async def _handle_write(msg: WriteMsg) -> tuple[bool, str | None]:
-    # TODO(F2.4): aplicar RBAC/ABAC + audit log antes de ejecutar el Command (§3.6).
+    # RBAC + audit log antes de ejecutar el Command (§3.6, F2.4b).
+    from app.security import context
+    from app.security.rbac import can
+
+    if context.user_store.enabled:
+        data = context.cipher.verify_token(msg.token or "")
+        if data is None:
+            return False, "token requerido o inválido"
+        username, role = data["username"], data["role"]
+    else:
+        username, role = "anonymous", "admin"  # modo abierto
+    if not can(role, "tag:write"):
+        return False, "permiso denegado: tag:write"
+
+    prev = state.tag_cache.get(msg.project_id, msg.tag_id)
+    old_value = prev.value if prev else None
     try:
         ok = await state.write_tag(msg.project_id, msg.tag_id, msg.value)
-        return ok, None
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
+    await state.audit("tag:write", username=username, project_id=msg.project_id,
+                      detail=msg.tag_id, old_value=old_value, new_value=msg.value)
+    return ok, None
