@@ -12,6 +12,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field, TypeAdapter
 
+from app.models.alarm import AlarmRule
 from app.models.node import Node
 from app.models.tag import Tag
 
@@ -33,6 +34,7 @@ class ProjectV1(BaseModel):
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)
     tags: list[Tag] = Field(default_factory=list)
+    alarms: list[AlarmRule] = Field(default_factory=list)  # F2.4a
 
 
 # Unión discriminada. Hoy solo v1; el discriminador deja la puerta abierta a v2+.
