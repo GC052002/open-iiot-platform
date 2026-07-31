@@ -41,6 +41,25 @@ def evaluate(value: Any, condition: str, threshold: float) -> bool:
     return False
 
 
+def _resolve_active(value: Any, rule: AlarmRule, was_active: bool) -> bool:
+    """Estado de alarma con histéresis (Rev 12): activa con la condición normal, pero
+    para despejar exige cruzar el umbral por la banda `hysteresis` (anti-rebote)."""
+    in_alarm = evaluate(value, rule.condition, rule.threshold)
+    if not was_active or rule.hysteresis <= 0:
+        return in_alarm
+    # Estaba activa: mantenerla hasta que el valor cruce claramente de vuelta.
+    if value is None:
+        return True
+    try:
+        if rule.condition in ("gt", "ge"):
+            return value > rule.threshold - rule.hysteresis
+        if rule.condition in ("lt", "le"):
+            return value < rule.threshold + rule.hysteresis
+    except TypeError:
+        return in_alarm
+    return in_alarm  # eq/ne: sin histéresis
+
+
 class AlarmEngine:
     def __init__(self, notifier: Notifier | None = None) -> None:
         self._notifier = notifier or LogNotifier()
@@ -79,9 +98,9 @@ class AlarmEngine:
 
     def _apply(self, project_id: str, rule: AlarmRule, value: Any) -> list[AlarmEvent]:
         key = (project_id, rule.id)
-        in_alarm = evaluate(value, rule.condition, rule.threshold)
         prev = self._state.get(key)
         was = prev.active if prev else False
+        in_alarm = _resolve_active(value, rule, was)  # con histéresis (Rev 12)
         if in_alarm == was:
             return []  # sin transición
         self._state[key] = AlarmState(
@@ -96,6 +115,17 @@ class AlarmEngine:
                 state="active" if in_alarm else "cleared", value=value,
             )
         ]
+
+    # -- Ciclo de vida del notificador (cola/worker, Rev 12) ------------------
+    def start(self) -> None:
+        start = getattr(self._notifier, "start", None)
+        if callable(start):
+            start()
+
+    async def stop(self) -> None:
+        stop = getattr(self._notifier, "stop", None)
+        if callable(stop):
+            await stop()
 
     # -- Consulta -------------------------------------------------------------
     def active_alarms(self, project_id: str) -> list[dict[str, Any]]:

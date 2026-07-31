@@ -109,7 +109,11 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
   - **F2.4a — Alarmas** ✅ **Completa (60 tests verdes)**: `AlarmEngine` suscriptor delta del
     TagCache; reglas por proyecto (gt/lt/ge/le/eq/ne + severidad); notifica solo en transiciones;
     `Notifier` (LogNotifier; Telegram/SMTP = misma interfaz, F2.4b); `GET /alarms`.
-  - **F2.4b — Seguridad:** Fernet (clave externa) + RBAC + audit log; notificadores Telegram/SMTP.
+  - **F2.4b — Seguridad** ✅ **Completa (69 tests verdes)**: cifrado **Fernet** de credenciales
+    + firma de tokens; **RBAC** (admin/engineer/operator/viewer) **opt-in** (abierto si no hay
+    usuarios; exige token+rol si `IIOT_USERS` está configurado); **audit log** de acciones
+    críticas (`GET /audit`) con quién/cuándo/anterior→nuevo; `POST /login`; notificadores
+    **Telegram/SMTP** (stdlib) enchufables por entorno.
   - **F2.4c — Observabilidad:** `observability/metrics.py` (Prometheus) + `health.py` granular.
 - **Ejecución:** implementa Opus (atención a snap7/threading y seguridad); revisan GLM/Gemini. `[dep: F1]`
 

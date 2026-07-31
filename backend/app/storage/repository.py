@@ -27,6 +27,15 @@ class HistorianRepository(abc.ABC):
     ) -> list[dict[str, Any]]:
         """Devuelve las muestras más recientes de un tag (ts desc)."""
 
+    # -- Audit log (F2.4b) ----------------------------------------------------
+    @abc.abstractmethod
+    async def record_audit(self, entry: dict[str, Any]) -> None:
+        """Registra una acción crítica (login, escritura, cambio de proyecto)."""
+
+    @abc.abstractmethod
+    async def query_audit(self, project_id: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+        """Devuelve las entradas de auditoría más recientes (ts desc)."""
+
     @abc.abstractmethod
     async def close(self) -> None:
         """Libera recursos."""

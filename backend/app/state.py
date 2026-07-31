@@ -13,7 +13,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from app.alarms import AlarmEngine
+from app.alarms import AlarmEngine, build_notifier_from_env
 from app.engine.runtime import Runtime
 from app.engine.tag_cache import TagCache
 from app.models.project import ProjectV1
@@ -34,7 +34,7 @@ class AppState:
         self._projects: dict[str, _RunningProject] = {}
         self.repo: HistorianRepository | None = None
         self.tag_buffer: TagBuffer | None = None
-        self.alarms = AlarmEngine()
+        self.alarms = AlarmEngine(build_notifier_from_env())
         # Suscriptores delta del TagCache (solo cambios): WebSocket y alarmas.
         self.tag_cache.subscribe(self.manager.on_tag_update)
         self.tag_cache.subscribe(self.alarms.on_tag_update)
@@ -50,9 +50,11 @@ class AppState:
         # raw=True: el historiador recibe todas las muestras válidas (Rev 8).
         self.tag_cache.subscribe(self.tag_buffer.on_samples, raw=True)
         self.tag_buffer.start()
+        self.alarms.start()  # worker de notificaciones (Rev 12) si aplica
 
     async def shutdown(self) -> None:
         await self.stop_all()
+        await self.alarms.stop()
         if self.tag_buffer is not None:
             await self.tag_buffer.stop()
             self.tag_buffer = None
@@ -98,6 +100,11 @@ class AppState:
         if runtime is None:
             raise RuntimeError(f"proyecto no iniciado: {project_id!r}")
         return await runtime.write_tag(tag_id, value)
+
+    async def audit(self, action: str, **fields: Any) -> None:
+        """Registra una acción crítica en el audit log (no falla si no hay repo)."""
+        if self.repo is not None:
+            await self.repo.record_audit({"action": action, **fields})
 
     def health(self) -> dict[str, Any]:
         return {pid: rp.runtime.health() for pid, rp in self._projects.items()}

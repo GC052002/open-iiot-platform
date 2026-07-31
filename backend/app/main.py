@@ -63,7 +63,16 @@ async def health() -> dict[str, Any]:
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
+    # Auth en el handshake (Rev 12): el rol se cachea en el cliente; los WriteMsg ya no
+    # descifran el token en el hot path. Token vía query param `?token=...`.
+    from app.security.auth import resolve_user
+
+    user = resolve_user(ws.query_params.get("token"))
+    if user is None:
+        await ws.close(code=1008)  # policy violation
+        return
     client = await state.manager.connect(ws)
+    client.role, client.username = user.role, user.username
     sender = asyncio.create_task(state.manager.sender_loop(client))
     try:
         async for raw in ws.iter_text():
@@ -76,7 +85,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
             elif isinstance(msg, UnsubscribeMsg):
                 state.manager.unsubscribe(client, msg.project_id, msg.tag_ids)
             elif isinstance(msg, WriteMsg):
-                ok, detail = await _handle_write(msg)
+                ok, detail = await _handle_write(msg, client)
                 await ws.send_text(
                     AckMsg(request_id=msg.request_id, ok=ok, detail=detail).model_dump_json()
                 )
@@ -89,10 +98,19 @@ async def ws_endpoint(ws: WebSocket) -> None:
             await sender
 
 
-async def _handle_write(msg: WriteMsg) -> tuple[bool, str | None]:
-    # TODO(F2.4): aplicar RBAC/ABAC + audit log antes de ejecutar el Command (§3.6).
+async def _handle_write(msg: WriteMsg, client) -> tuple[bool, str | None]:  # noqa: ANN001
+    # RBAC contra el rol cacheado del handshake (Rev 12) + audit log (§3.6).
+    from app.security.rbac import can
+
+    if not can(client.role, "tag:write"):
+        return False, "permiso denegado: tag:write"
+
+    prev = state.tag_cache.get(msg.project_id, msg.tag_id)
+    old_value = prev.value if prev else None
     try:
         ok = await state.write_tag(msg.project_id, msg.tag_id, msg.value)
-        return ok, None
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
+    await state.audit("tag:write", username=client.username, project_id=msg.project_id,
+                      detail=msg.tag_id, old_value=old_value, new_value=msg.value)
+    return ok, None

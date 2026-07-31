@@ -130,6 +130,19 @@ shutdown limpio (`async with Client`), backoff ante `MqttError`. **F2.2 lista pa
 
 **F2.3 lista para PLC S7 físico — 55 tests verdes.**
 
+## Rev 12 — Revisión externa (Gemini) de F2.4a + F2.4b · 2026-07-31
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| **CRÍTICA** | auth.py | modo anónimo:admin silencioso si falta `IIOT_USERS` | ✅ Fail-closed: anónimo solo con `IIOT_ALLOW_ANONYMOUS=true`; si no, 403 |
+| **CRÍTICA** | crypto.py | clave Fernet efímera en prod invalida sesiones/credenciales al reiniciar | ✅ Fail-closed: `IIOT_FERNET_KEY` obligatoria (efímera solo en modo dev) |
+| **CRÍTICA** | ws/manager.py + main.py | token descifrado en cada WriteMsg (latencia en el hot path) | ✅ Auth en el handshake (`?token=`); rol cacheado en `_Client`; los WriteMsg solo validan rol |
+| Industrial | alarms/engine.py | flapping de alarmas al oscilar en el umbral | ✅ Campo `hysteresis` en `AlarmRule` + banda anti-rebote al despejar |
+| Industrial | alarms/notifier.py | notificaciones perdidas por timeout / baneo 429 en ráfaga | ✅ `QueuedNotifier`: cola acotada + rate-limit + reintentos con backoff |
+
+Aceptado sin cambios: audit en la BD del historiador (ok para air-gapped; separada en F4);
+Fernet como token opaco (válido mientras sea monolítico). **F2.4 lista para merge — 74 tests verdes.**
+
 ## Cómo correr
 
 ```bash

@@ -32,9 +32,17 @@ si es conexión (host/puerto/rack-slot) o lectura (dirección).
 
 ## 2. Arranca el backend
 
+Seguridad **fail-closed** (Rev 12): en producción define `IIOT_FERNET_KEY` (y opcionalmente
+`IIOT_USERS` para activar RBAC). Para una **demo/dev sin auth**, exporta el flag explícito:
+
 ```bash
+export IIOT_ALLOW_ANONYMOUS=true                   # solo dev/demo (sin usuarios ni clave)
 uvicorn app.main:app --host 0.0.0.0 --port 8000    # + historiador SQLite (WAL)
 ```
+
+Modo seguro (con RBAC): `export IIOT_FERNET_KEY=$(python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())")`
+y `export IIOT_USERS='[{"username":"admin","role":"admin","password":"cambia_esto"}]'`; luego
+`POST /login` para obtener el token y enviarlo como `Authorization: Bearer <token>`.
 
 ## 3. Carga tu proyecto (con la topología del PLC real)
 

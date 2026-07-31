@@ -8,7 +8,12 @@ integración del driver.
 from __future__ import annotations
 
 import asyncio
+import os
 import socket
+
+# Los tests corren en modo dev: permite acceso anónimo y clave Fernet efímera
+# (fail-closed en producción, Rev 12). Debe fijarse antes de importar la app.
+os.environ.setdefault("IIOT_ALLOW_ANONYMOUS", "true")
 
 import pytest
 

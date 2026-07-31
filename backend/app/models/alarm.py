@@ -21,6 +21,7 @@ class AlarmRule(BaseModel):
     tag_id: str = Field(..., description="Tag evaluado.")
     condition: Condition = "gt"
     threshold: float = 0.0
+    hysteresis: float = 0.0  # Rev 12: banda anti-rebote (evita flapping en el umbral)
     severity: Severity = "warning"
     message: str = ""
 
