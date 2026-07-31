@@ -46,6 +46,12 @@ async def get_project(project_id: str) -> dict[str, Any]:
     return runtime.project.model_dump()
 
 
+@router.get("/alarms")
+async def alarms(project_id: str = "default") -> list[dict[str, Any]]:
+    """Alarmas actualmente activas del proyecto (F2.4a)."""
+    return state.alarms.active_alarms(project_id)
+
+
 @router.get("/history")
 async def history(project_id: str, tag_id: str, limit: int = 1000) -> list[dict[str, Any]]:
     """Muestras históricas de un tag (ts desc). Persistidas por el TagBuffer (F2.1)."""

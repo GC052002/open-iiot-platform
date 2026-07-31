@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from app.alarms import AlarmEngine
 from app.engine.runtime import Runtime
 from app.engine.tag_cache import TagCache
 from app.models.project import ProjectV1
@@ -33,8 +34,10 @@ class AppState:
         self._projects: dict[str, _RunningProject] = {}
         self.repo: HistorianRepository | None = None
         self.tag_buffer: TagBuffer | None = None
-        # El manager es suscriptor delta del TagCache (solo cambios → WebSocket).
+        self.alarms = AlarmEngine()
+        # Suscriptores delta del TagCache (solo cambios): WebSocket y alarmas.
         self.tag_cache.subscribe(self.manager.on_tag_update)
+        self.tag_cache.subscribe(self.alarms.on_tag_update)
 
     # -- Persistencia (F2.1) --------------------------------------------------
     async def startup(self, repo: HistorianRepository | None = None) -> None:
@@ -60,6 +63,7 @@ class AppState:
     async def start_project(self, project: ProjectV1) -> None:
         """Arranca (o reinicia) un proyecto con su propio Runtime/TaskGroup."""
         await self.stop_project(project.project_id)
+        self.alarms.register_project(project.project_id, project.alarms)
         runtime = Runtime(project, tag_cache=self.tag_cache)
         task = asyncio.create_task(runtime.run(), name=f"runtime:{project.project_id}")
         self._projects[project.project_id] = _RunningProject(runtime=runtime, task=task)
@@ -74,6 +78,7 @@ class AppState:
             await running.task
         except (asyncio.CancelledError, Exception):
             pass
+        self.alarms.unregister_project(project_id)
         self.tag_cache.drop_project(project_id)
 
     async def stop_all(self) -> None:

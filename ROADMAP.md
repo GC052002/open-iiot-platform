@@ -105,8 +105,12 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
         compartida por Modbus y S7
   - [x] Tests puros (parseo/decode/encode/mapeo) sin PLC/servidor; `DEMO.md` para presentar
   - *(prueba en vivo de S7/OPC UA requiere PLC/servidor real)*
-- **F2.4 — Seguridad + valor añadido:** Fernet (clave externa) + RBAC + audit log;
-  Motor de Alarmas (suscriptor) + notificación; `observability/metrics.py` (Prometheus) + `health.py`.
+- **F2.4 — Seguridad + valor añadido** (sub-fases):
+  - **F2.4a — Alarmas** ✅ **Completa (60 tests verdes)**: `AlarmEngine` suscriptor delta del
+    TagCache; reglas por proyecto (gt/lt/ge/le/eq/ne + severidad); notifica solo en transiciones;
+    `Notifier` (LogNotifier; Telegram/SMTP = misma interfaz, F2.4b); `GET /alarms`.
+  - **F2.4b — Seguridad:** Fernet (clave externa) + RBAC + audit log; notificadores Telegram/SMTP.
+  - **F2.4c — Observabilidad:** `observability/metrics.py` (Prometheus) + `health.py` granular.
 - **Ejecución:** implementa Opus (atención a snap7/threading y seguridad); revisan GLM/Gemini. `[dep: F1]`
 
 ### Fase 3 — Frontend (canvas HMI) · *~5–6 j*
