@@ -39,6 +39,9 @@ class _Client:
     )
     keys: set[SubKey] = field(default_factory=set)
     dropped: int = 0
+    # Auth cacheada en el handshake (Rev 12): evita descifrar el token en cada escritura.
+    role: str = "viewer"
+    username: str = "anonymous"
 
 
 class ConnectionManager:

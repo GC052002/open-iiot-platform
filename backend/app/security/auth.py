@@ -1,11 +1,14 @@
-"""Autenticación y autorización FastAPI (F2.4b).
+"""Autenticación y autorización FastAPI (F2.4b, endurecido en Rev 12).
 
-Modelo **opt-in**: si no hay usuarios configurados (`UserStore.enabled == False`), los
-endpoints quedan abiertos y el usuario es un `admin` anónimo (modo air-gapped/dev). Al
-configurar usuarios, se exige `Authorization: Bearer <token>` y el rol adecuado.
+**Fail-closed:** si no hay usuarios configurados, el acceso anónimo (admin) solo se
+concede con `IIOT_ALLOW_ANONYMOUS=true` (dev/air-gapped explícito). Sin ese flag y sin
+usuarios, se rechaza (servidor mal configurado). Con `IIOT_USERS` definido, se exige
+`Authorization: Bearer <token>` y el rol adecuado.
 """
 
 from __future__ import annotations
+
+import os
 
 from fastapi import Depends, Header, HTTPException
 
@@ -13,6 +16,10 @@ from app.security import context
 from app.security.rbac import User, can
 
 _ANONYMOUS = User(username="anonymous", role="admin")
+
+
+def _anonymous_allowed() -> bool:
+    return os.environ.get("IIOT_ALLOW_ANONYMOUS", "false").lower() == "true"
 
 
 def login(username: str, password: str) -> str | None:
@@ -23,15 +30,30 @@ def login(username: str, password: str) -> str | None:
     return context.cipher.sign_token({"username": user.username, "role": user.role})
 
 
-async def current_user(authorization: str | None = Header(default=None)) -> User:
+def resolve_user(token: str | None) -> User | None:
+    """Resuelve el usuario desde un token (o anónimo en modo dev). None = no autorizado.
+
+    Compartido por REST y WebSocket (auth en el handshake, Rev 12).
+    """
     if not context.user_store.enabled:
-        return _ANONYMOUS  # modo abierto
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="token requerido")
-    data = context.cipher.verify_token(authorization[7:])
+        return _ANONYMOUS if _anonymous_allowed() else None
+    if not token:
+        return None
+    data = context.cipher.verify_token(token)
     if data is None:
-        raise HTTPException(status_code=401, detail="token inválido o expirado")
+        return None
     return User(username=data["username"], role=data["role"])
+
+
+async def current_user(authorization: str | None = Header(default=None)) -> User:
+    token = authorization[7:] if authorization and authorization.startswith("Bearer ") else None
+    if not context.user_store.enabled and not _anonymous_allowed():
+        raise HTTPException(status_code=403,
+                            detail="servidor sin autenticación configurada (define IIOT_USERS)")
+    user = resolve_user(token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="token requerido o inválido")
+    return user
 
 
 def require(permission: str):

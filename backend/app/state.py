@@ -50,9 +50,11 @@ class AppState:
         # raw=True: el historiador recibe todas las muestras válidas (Rev 8).
         self.tag_cache.subscribe(self.tag_buffer.on_samples, raw=True)
         self.tag_buffer.start()
+        self.alarms.start()  # worker de notificaciones (Rev 12) si aplica
 
     async def shutdown(self) -> None:
         await self.stop_all()
+        await self.alarms.stop()
         if self.tag_buffer is not None:
             await self.tag_buffer.stop()
             self.tag_buffer = None

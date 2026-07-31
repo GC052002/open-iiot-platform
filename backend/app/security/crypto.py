@@ -23,11 +23,15 @@ class CredentialCipher:
     def __init__(self, key: str | bytes | None = None) -> None:
         key = key or os.environ.get("IIOT_FERNET_KEY")
         if not key:
-            key = Fernet.generate_key()
-            log.warning(
-                "IIOT_FERNET_KEY no definida: usando clave EFÍMERA (no persistente). "
-                "Define IIOT_FERNET_KEY en producción (env/SOPS/Vault)."
-            )
+            # Fail-closed (Rev 12): la clave efímera solo se permite en modo dev explícito.
+            if os.environ.get("IIOT_ALLOW_ANONYMOUS", "false").lower() == "true":
+                key = Fernet.generate_key()
+                log.warning("IIOT_FERNET_KEY no definida: clave EFÍMERA (modo dev).")
+            else:
+                raise RuntimeError(
+                    "IIOT_FERNET_KEY es obligatoria. Defínela (env/SOPS/Vault) o, solo en "
+                    "desarrollo, exporta IIOT_ALLOW_ANONYMOUS=true."
+                )
         self._fernet = Fernet(key if isinstance(key, bytes) else key.encode())
 
     # -- Cifrado de credenciales ---------------------------------------------

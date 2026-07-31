@@ -56,6 +56,77 @@ def format_message(event: AlarmEvent) -> str:
     )
 
 
+class QueuedNotifier(Notifier):
+    """Envuelve un notificador con **cola acotada + rate-limit + reintentos** (Rev 12).
+
+    `notify()` solo encola (no bloquea el motor de alarmas). Un worker consume a
+    `rate_per_sec` como máximo, con reintentos y backoff exponencial. Evita perder
+    notificaciones por timeouts y baneos por ráfaga (HTTP 429 de Telegram).
+    """
+
+    def __init__(self, inner: Notifier, rate_per_sec: float = 1.0,
+                 max_retries: int = 3, maxsize: int = 1000) -> None:
+        self._inner = inner
+        self._min_interval = 1.0 / rate_per_sec if rate_per_sec > 0 else 0.0
+        self._max_retries = max_retries
+        self._queue: "asyncio.Queue[AlarmEvent]" = None  # type: ignore[assignment]
+        self._maxsize = maxsize
+        self._task = None
+
+    async def notify(self, event: AlarmEvent) -> None:
+        import asyncio
+
+        if self._queue is None:
+            self._queue = asyncio.Queue(maxsize=self._maxsize)
+        try:
+            self._queue.put_nowait(event)
+        except asyncio.QueueFull:
+            log.warning("Cola de notificaciones llena; se descarta un evento de %s",
+                        event.tag_id)
+
+    def start(self) -> None:
+        import asyncio
+
+        if self._queue is None:
+            self._queue = asyncio.Queue(maxsize=self._maxsize)
+        if self._task is None:
+            self._task = asyncio.create_task(self._run(), name="notifier_worker")
+
+    async def _run(self) -> None:
+        import asyncio
+
+        while True:
+            event = await self._queue.get()
+            await self._send_with_retry(event)
+            if self._min_interval:
+                await asyncio.sleep(self._min_interval)  # rate-limit
+
+    async def _send_with_retry(self, event: AlarmEvent) -> None:
+        import asyncio
+
+        delay = 1.0
+        for _ in range(self._max_retries):
+            try:
+                await self._inner.notify(event)
+                return
+            except Exception:  # noqa: BLE001
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 30.0)
+        log.error("Notificación descartada tras %d reintentos (tag=%s)",
+                  self._max_retries, event.tag_id)
+
+    async def stop(self) -> None:
+        import asyncio
+
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+
 def build_notifier_from_env() -> "Notifier":
     """Construye el notificador según el entorno: siempre log; Telegram/SMTP si están
     configurados (IIOT_TELEGRAM_TOKEN/CHAT_ID, IIOT_SMTP_HOST/...)."""
@@ -75,7 +146,10 @@ def build_notifier_from_env() -> "Notifier":
             username=os.environ.get("IIOT_SMTP_USER"),
             password=os.environ.get("IIOT_SMTP_PASSWORD"),
         ))
-    return notifiers[0] if len(notifiers) == 1 else CompositeNotifier(*notifiers)
+    if len(notifiers) == 1:
+        return notifiers[0]  # solo log: envío directo, sin cola
+    # Con notificadores de red (Telegram/SMTP): cola + rate-limit + reintentos (Rev 12).
+    return QueuedNotifier(CompositeNotifier(*notifiers))
 
 
 class TelegramNotifier(Notifier):

@@ -4,6 +4,7 @@ from app.alarms.engine import AlarmEngine
 from app.alarms.notifier import (
     LogNotifier,
     Notifier,
+    QueuedNotifier,
     SMTPNotifier,
     TelegramNotifier,
     build_notifier_from_env,
@@ -12,5 +13,5 @@ from app.alarms.notifier import (
 
 __all__ = [
     "AlarmEngine", "Notifier", "LogNotifier", "TelegramNotifier", "SMTPNotifier",
-    "build_notifier_from_env", "format_message",
+    "QueuedNotifier", "build_notifier_from_env", "format_message",
 ]
