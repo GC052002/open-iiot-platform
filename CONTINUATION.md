@@ -24,7 +24,7 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 ## Estado actual (2026-07-30)
 
 - **F0** ✅ · **F1** ✅ · **F2.0–F2.3** ✅ · monitor web ✅ · **F2.4a (alarmas)** ✅ —
-  todo mergeado a `main` (excepto F2.4a que está en la rama pendiente de merge).
+  todo mergeado a `main` (PRs #1–#12).
 - **Tests:** 60 verdes (`pytest -q`).
 - **Revisiones integradas:** Rev 1–11 (Gemini + GLM).
 - **Demo / PLC real:** ver `DEMO.md` + preflight `python -m app.tools.plc_check`. Monitor en `/`.
