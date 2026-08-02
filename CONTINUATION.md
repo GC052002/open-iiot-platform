@@ -1,89 +1,121 @@
 # Continuación — retomar el proyecto en un chat nuevo
 
-> Documento de handoff. Si este chat alcanza su límite, abre uno nuevo y usa el
-> **prompt de arranque** de abajo. El repo es la fuente de verdad; no se pierde nada.
+> Documento de handoff. Si el chat alcanza su límite, abre uno nuevo y pega el
+> **prompt de arranque** de abajo. El repo (`main`) es la fuente de verdad; no se
+> pierde nada.
 
 ## Prompt para pegar en el chat nuevo
 
 ```
-Estoy desarrollando la plataforma IIoT Open Source (GC052002/open-iiot-platform).
-Lee en la rama main estos documentos para tener el contexto completo, en este orden:
-1. PROJECT_CONTEXT.md  (visión híbrida + decisiones validadas Rev 7)
-2. ARCHITECTURE.md     (decisiones de diseño, matriz §9)
-3. ROADMAP.md          (fases; vamos por F2, con F2.0 ya completa)
-4. REVIEW_TASKS.md     (historial de revisiones Gemini/GLM)
-5. CONTINUATION.md     (este archivo)
+Estoy desarrollando una plataforma IIoT/SCADA Open Source (repo GitHub:
+GC052002/open-iiot-platform). Continúa el trabajo desde donde quedó.
 
-Flujo de trabajo: yo (Claude/Opus) implemento fase por fase; GLM y Gemini son
-revisores externos que critican cada fase y yo integro su feedback como "Rev N".
-Desarrollo en la rama claude/open-iiot-platform-64k96b y mergeo a main al cerrar
-cada bloque. Prioridad: avanzar con calidad y tests verdes, cuidando el presupuesto
-de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer).
+ACCESO A GITHUB (importante): trabajamos sobre GC052002/open-iiot-platform.
+- Si el repo no está en el scope de esta sesión, añádelo con la herramienta add_repo
+  (o list_repos para verlo). Clónalo si hace falta.
+- Los cambios se hacen con git (push/pull van por el proxy de la sesión) y los PRs con
+  las herramientas mcp__github__* (create_pull_request / merge_pull_request).
+- Rama de trabajo: claude/open-iiot-platform-64k96b. Se REINICIA desde main al empezar
+  cada bloque nuevo (git fetch origin main && git checkout -B <rama> origin/main).
+
+PONTE AL DÍA leyendo en la rama main, en este orden:
+1. CONTINUATION.md   (este archivo: estado, siguiente paso, cómo correr)
+2. PROJECT_CONTEXT.md (visión: ingesta híbrida Modbus/MQTT/S7/OPC UA, multi-tenant)
+3. ARCHITECTURE.md    (decisiones de diseño; matriz de decisiones §9)
+4. ROADMAP.md         (fases; vamos a empezar F3)
+5. REVIEW_TASKS.md    (historial de revisiones Rev 1–13 de Gemini/GLM)
+
+FLUJO DE TRABAJO:
+- Yo (Claude/Opus) implemento fase por fase, con tests verdes, y mergeo a main vía PR
+  al cerrar cada bloque. Actualizo este CONTINUATION.md tras cada merge.
+- GLM y Gemini son revisores externos: el usuario me trae su feedback y yo lo integro
+  como "Rev N" antes de mergear (o después si ya mergeé un bloque autocontenido).
+- Prioridad: calidad + modularidad + tests, cuidando el presupuesto de tokens.
+
+ESTADO: Fase 2 COMPLETA (backend industrial). SIGUIENTE: F3 (frontend visual, canvas
+HMI tipo WinCC/Node-RED). Empieza por F3.0 (scaffold React + React Flow + conexión al
+backend), o propón primero un mini-diseño de F3 si lo ves necesario.
 ```
 
-## Estado actual (2026-07-30)
+## Estado actual (2026-07-31)
 
-- **F0** ✅ · **F1** ✅ · **F2.0–F2.3** ✅ · monitor web ✅ · **F2.4 completa** (alarmas +
-  seguridad + observabilidad) ✅ — todo mergeado a `main` (PRs #1–#16). **Fase 2 terminada.**
+- **Fase 2 COMPLETA.** F0 ✅ · F1 ✅ · F2.0–F2.3 ✅ · monitor web ✅ · **F2.4** (alarmas +
+  seguridad + observabilidad) ✅ — todo en `main` (PRs #1–#17).
 - **Tests:** 80 verdes (`pytest -q`).
 - **Revisiones integradas:** Rev 1–13 (Gemini + GLM).
-- **Demo / PLC real:** ver `DEMO.md` + preflight `python -m app.tools.plc_check`. Monitor en `/`.
-- **Siguiente:** **F3 — Frontend visual completo** (canvas HMI tipo WinCC/Node-RED). El backend
-  ya expone /metrics, /health/drivers, /alarms, /audit, /login, WS, historiador.
-- **Nota Rev 12:** seguridad fail-closed → dev/demo requiere `IIOT_ALLOW_ANONYMOUS=true` (ver DEMO.md).
-- **Ramas:** `main` tiene F0–F2.0; F2.1 está en `claude/open-iiot-platform-64k96b`.
-  La rama de trabajo se reinicia desde `main` al empezar cada bloque nuevo.
+- **Siguiente:** **F3 — Frontend visual** (canvas HMI).
 
-### Qué hay implementado (backend/app)
-- `models/` — `Tag` (deadband), nodos discriminados, `Project` (unión discriminada,
-  con `project_id`).
-- `engine/` — `TagCache` (deadband + **orden temporal** + segmentado por `project_id`),
-  `ScanScheduler` (neutro de protocolo), `Runtime` (`asyncio.TaskGroup`, backoff, `stop()`).
-- `drivers/` — `BaseDriver` (async `write_tag`, `bind_tags`), `registry` (Factory),
-  `modbus_driver` (real, lectura por bloques con límite PDU + decode por tipo), `modbus_sim`.
-- `ws/` — `protocol` (contrato de mensajes, con `project_id`), `manager` (backpressure,
-  routing por `(project_id, tag_id)`).
-- `state.py` — `AppState` multi-tenant (un `Runtime`/`TaskGroup` por proyecto, TagCache
-  compartido, ConnectionManager global).
-- `api/` — `POST /projects`, `GET /projects`, `GET /projects/{id}`, `GET /tags?project_id=`.
-- `main.py` — FastAPI + WS `/ws` + `/health` por proyecto.
+## Cómo acceder a GitHub (para el agente del chat nuevo)
 
-## Próximo paso: F2.4 — Seguridad + valor añadido
+- Repo: `GC052002/open-iiot-platform`. Rama principal: `main`. Rama de trabajo:
+  `claude/open-iiot-platform-64k96b`.
+- Si el repo no está en scope: usar `add_repo` (owner=GC052002, repo=open-iiot-platform)
+  y clonar. `list_repos` lo lista si hace falta descubrirlo.
+- Commits/push con `git` (proxy de la sesión). PRs y merges con `mcp__github__*`.
+- Regla de ramas: reiniciar la rama de trabajo desde `main` al empezar cada bloque
+  (`git fetch origin main && git checkout -B claude/open-iiot-platform-64k96b origin/main`),
+  implementar, `git push -u origin <rama>`, abrir PR a `main` y mergear.
 
-- **Seguridad:** cifrado **Fernet** de credenciales (clave externa vía env/SOPS, §3.5/§10.4);
-  **RBAC** por proyecto (admin/engineer/operator/viewer) impuesto en el backend; **audit log**
-  transaccional de escrituras (quién/cuándo/anterior→nuevo) en el patrón Command (§3.6).
-- **Alarmas:** motor de alarmas como **suscriptor delta** del `TagCache` (evalúa umbrales)
-  + notificación (Telegram/SMTP).
-- **Observabilidad:** `observability/metrics.py` (Prometheus `/metrics`) + `health.py`
-  granular por driver.
-- **Deudas anotadas para F2.4:** escritura MQTT (RPC over MQTT, contrato ya en el docstring),
-  QoS/retained MQTT configurable, cap del buffer de reintento del `TagBuffer`.
-
-### Ya hecho (arquitectura relevante)
-- **Drivers (F2.3):** S7 (polling, snap7 en to_thread, `DB{n}.{offset}`) y OPC UA (push,
-  asyncua subscriptions). D-M4: agrupación por bloques en `drivers/blockutil.py` (Modbus+S7).
-- **Unificación poll/push (F2.2):** `BaseDriver.run(publish, stopping)`; el Runtime aporta
-  `publish` y el wrapper connect/backoff/disconnect.
-- **Ingesta híbrida (F2.2):** `mqtt_driver.py` publica al mismo `TagCache`; respeta `ts`
-  del Edge; LWT → bad; `device_topic_index` para múltiples Edge.
-- **Persistencia (F2.1):** `storage/` Repository + `SQLiteHistorian` (WAL) + `TagBuffer`
-  raw (batch + retry). `GET /history`.
-
-## Decisiones ya cerradas que F2 debe respetar (no re-decidir)
-
-- Ingesta híbrida: MQTT respeta el `ts` del Edge; `TagCache` descarta out-of-order
-  (ya implementado); **LWT → `quality="bad"`** (pendiente, F2.2).
-- Multi-tenant: un proceso; `TagCache` segmentado; `TaskGroup` por proyecto (hecho).
-- Sandbox `LogicNode` (F3): `asteval` para cálculos; **WASM** (Wasmer/Extism) para
-  Python real (Docker descartado por cold-start).
-- Serializer WS: **JSON** en v1 (msgpack solo si el perfilado lo justifica).
-
-## Cómo correr / probar
+## Cómo correr / probar (Linux)
 
 ```bash
-pip install -e ".[dev]"
-pytest -q                                  # 26 passed
-python -m app.drivers.modbus_sim &         # simulador Modbus :5020
-uvicorn app.main:app                       # backend :8000
+pip install -e ".[dev]"          # + asegúrate de tener 'cryptography' funcional
+pytest -q                         # 80 passed
+# Demo/dev (seguridad fail-closed → requiere el flag):
+export IIOT_ALLOW_ANONYMOUS=true
+python -m app.drivers.modbus_sim &        # simulador Modbus TCP :5020
+uvicorn app.main:app --port 8000          # backend + historiador SQLite (WAL)
+# Navegador: http://localhost:8000/ (monitor en vivo) · /docs (Swagger) · /metrics
 ```
+Para conectar a un PLC real (S7/Modbus/OPC UA) ver `DEMO.md` (runbook + preflight
+`python -m app.tools.plc_check` + checklist TIA Portal).
+
+## Qué hay implementado (backend/app) — Fase 2 completa
+
+- `models/` — `Tag` (deadband), nodos discriminados por `type`, `Project` (unión
+  discriminada por `schema_version`, con `project_id` y `alarms`), `AlarmRule` (con `hysteresis`).
+- `engine/` — `TagCache` (deadband + orden temporal + segmentado por `project_id` +
+  suscriptores delta/raw), `ScanScheduler` (neutro de protocolo), `Runtime`
+  (`asyncio.TaskGroup`, backoff, `stop()`).
+- `drivers/` — `BaseDriver.run(publish, stopping)` unifica polling y push; `registry`
+  (Factory); `modbus_driver` (PDU + decode por tipo), `s7_driver` (snap7 en to_thread,
+  DBX/DBB/DBW/DBD), `opcua_driver` (asyncua subscriptions), `mqtt_driver` (aiomqtt, LWT,
+  device_topic_index), `blockutil` (D-M4), `modbus_sim`.
+- `storage/` — `HistorianRepository` + `SQLiteHistorian` (WAL) + `TagBuffer` (raw, batch,
+  retry) + tabla `audit`.
+- `alarms/` — `AlarmEngine` (delta, histéresis) + `Notifier` (Log/Telegram/SMTP) +
+  `QueuedNotifier` (cola, rate-limit, reintentos).
+- `security/` — `crypto` (Fernet, fail-closed), `rbac` (roles + PBKDF2), `auth` (opt-in),
+  `context`.
+- `observability/` — `metrics` (registro thread-safe → Prometheus).
+- `ws/` — `protocol` (mensajes con `project_id`, token), `manager` (backpressure, routing,
+  auth cacheada en handshake).
+- `state.py` — `AppState` multi-tenant (Runtime/TaskGroup por proyecto; TagCache y
+  ConnectionManager globales; historiador; alarmas; métricas).
+- `api/` — `/login`, `/projects` (POST/GET), `/projects/{id}`, `/tags`, `/history`,
+  `/alarms`, `/audit`, con RBAC. `main.py` — WS `/ws`, `/health`, `/health/drivers`,
+  `/metrics`, dashboard `/`.
+- `tools/plc_check.py` — preflight de conectividad a PLC real.
+
+## Próximo paso: F3 — Frontend visual (canvas HMI)
+
+Bloque grande; partir en sub-fases (como F2):
+- **F3.0** — scaffold React + React Flow; store de tags; cliente WS (`/ws`) + REST;
+  login (si `IIOT_USERS`); persistencia local (LocalStorage/IndexedDB).
+- **F3.1** — paleta (drivers/lógica/widgets) + canvas (arrastrar/conectar) + inspector
+  de propiedades (IPs, DB/registro, polling, umbrales de alarma).
+- **F3.2** — widgets HMI (tanque, válvula, gráfico) con **data binding por `tag_id`**
+  (usar el contrato WS ya fijado; el origen del dato es indiferente).
+- **F3.3** — import/export del JSON de proyecto (mismo `schema_version` que el backend)
+  + `LogicNode` con sandbox (**asteval** para cálculos; **WASM** Wasmer/Extism para
+  Python real — Docker descartado por cold-start).
+
+## Decisiones cerradas (no re-decidir)
+
+- Ingesta híbrida: MQTT respeta el `ts` del Edge; `TagCache` descarta out-of-order (`<`);
+  LWT → `quality="bad"`. Multi-tenant: un proceso; `TaskGroup` por proyecto.
+- Serializer WS: **JSON** en v1. Seguridad **fail-closed**: dev/demo necesita
+  `IIOT_ALLOW_ANONYMOUS=true`; prod define `IIOT_FERNET_KEY` (+ `IIOT_USERS` para RBAC).
+- Métricas: labels solo `driver`/`node` (nunca `tag_id`/`address`).
+- Diferido a F4: Redis (escala multi-worker), ABAC/Casbin, Vault, entry_points de drivers,
+  Sparkplug B (flag ya diseñado), TimescaleDB, tracing OTel, escritura MQTT (RPC over MQTT).
