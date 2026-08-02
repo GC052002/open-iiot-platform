@@ -79,6 +79,9 @@ class Runtime:
     def health(self) -> dict[str, Any]:
         return {"healthy": self._healthy, "drivers": sorted(self._drivers)}
 
+    def drivers(self) -> dict[str, BaseDriver]:
+        return dict(self._drivers)
+
     # -- Loop por driver (polling o push, unificado por driver.run) -----------
     async def _driver_scan_loop(self, node: DriverNode) -> None:
         backoff = _BACKOFF_START
@@ -98,6 +101,9 @@ class Runtime:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # reconexión con backoff, sin tumbar el resto
+                from app.observability.metrics import metrics
+
+                metrics.inc("iiot_driver_reconnects_total", {"node": node.id})
                 log.warning("Driver %s error: %s; reintento en %.1fs", node.id, exc, backoff)
                 await self._sleep_or_stop(backoff)
                 backoff = min(backoff * 2, _BACKOFF_MAX)

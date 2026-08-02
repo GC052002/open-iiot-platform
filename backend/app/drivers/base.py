@@ -62,10 +62,18 @@ class BaseDriver(abc.ABC):
     async def run(self, publish: Publish, stopping: asyncio.Event) -> None:
         """Bucle de ingesta. Default = **polling**: lee por bloques y publica hasta
         que se señalice `stopping`. Los drivers **push** (MQTT) sobrescriben esto."""
+        import time
+
+        from app.observability.metrics import metrics
+
         poll_rate = float(self.config.get("polling_rate", 1.0))
         tags = list(self._tags.values())
+        labels = {"driver": self.driver_type, "node": self.node.id}
         while not stopping.is_set():
+            t0 = time.perf_counter()
             samples = await self.read_block(tags)
+            metrics.observe("iiot_driver_read_latency_ms", labels, (time.perf_counter() - t0) * 1000)
+            metrics.inc("iiot_driver_reads_total", labels)
             await publish(samples)
             await sleep_or_stop(stopping, poll_rate)
 

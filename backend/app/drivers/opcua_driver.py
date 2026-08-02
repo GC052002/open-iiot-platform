@@ -31,6 +31,13 @@ class _SubHandler:
         self._publish = publish
 
     def datachange_notification(self, node, val, data) -> None:  # noqa: ANN001 - API asyncua
+        import time
+
+        from app.observability.metrics import metrics
+
+        labels = {"driver": self._driver.driver_type, "node": self._driver.node.id}
+        metrics.inc("iiot_driver_messages_received_total", labels)   # Rev 13
+        metrics.observe("iiot_driver_last_message_ts", labels, time.time())
         sample = self._driver.to_sample(node.nodeid.to_string(), val)
         if sample is not None:
             # El handler es síncrono; programamos la publicación en el loop.
