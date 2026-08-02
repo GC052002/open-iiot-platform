@@ -23,12 +23,13 @@ de tokens (ver ROADMAP §0). Retomamos en F2.1 (persistencia SQLite + TagBuffer)
 
 ## Estado actual (2026-07-30)
 
-- **F0** ✅ · **F1** ✅ · **F2.0–F2.3** ✅ · monitor web ✅ · **F2.4a (alarmas)** ✅ ·
-  **F2.4b (seguridad)** ✅ — todo mergeado a `main` (PRs #1–#14).
-- **Tests:** 74 verdes (`pytest -q`).
-- **Revisiones integradas:** Rev 1–12 (Gemini + GLM).
+- **F0** ✅ · **F1** ✅ · **F2.0–F2.3** ✅ · monitor web ✅ · **F2.4 completa** (alarmas +
+  seguridad + observabilidad) ✅ — todo mergeado a `main` (PRs #1–#16). **Fase 2 terminada.**
+- **Tests:** 80 verdes (`pytest -q`).
+- **Revisiones integradas:** Rev 1–13 (Gemini + GLM).
 - **Demo / PLC real:** ver `DEMO.md` + preflight `python -m app.tools.plc_check`. Monitor en `/`.
-- **Siguiente:** F2.4c — observabilidad (métricas Prometheus + health granular), o F3 (frontend).
+- **Siguiente:** **F3 — Frontend visual completo** (canvas HMI tipo WinCC/Node-RED). El backend
+  ya expone /metrics, /health/drivers, /alarms, /audit, /login, WS, historiador.
 - **Nota Rev 12:** seguridad fail-closed → dev/demo requiere `IIOT_ALLOW_ANONYMOUS=true` (ver DEMO.md).
 - **Ramas:** `main` tiene F0–F2.0; F2.1 está en `claude/open-iiot-platform-64k96b`.
   La rama de trabajo se reinicia desde `main` al empezar cada bloque nuevo.
