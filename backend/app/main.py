@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 
 import app.drivers  # noqa: F401 - efecto: registra los drivers built-in
 from app.api import router as api_router
@@ -59,6 +59,20 @@ async def health() -> dict[str, Any]:
     per_project = state.health()
     ok = all(h["healthy"] for h in per_project.values())
     return {"status": "ok" if ok else "degraded", "projects": per_project}
+
+
+@app.get("/health/drivers")
+async def health_drivers() -> dict[str, Any]:
+    """Health granular por proyecto/driver (§10.5, F2.4c)."""
+    return await state.driver_health()
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+async def metrics_endpoint() -> str:
+    """Métricas en formato Prometheus (F2.4c). Abierto para el scraper."""
+    from app.observability.metrics import metrics
+
+    return metrics.render()
 
 
 @app.websocket("/ws")

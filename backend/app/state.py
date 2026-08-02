@@ -51,6 +51,8 @@ class AppState:
         self.tag_cache.subscribe(self.tag_buffer.on_samples, raw=True)
         self.tag_buffer.start()
         self.alarms.start()  # worker de notificaciones (Rev 12) si aplica
+        from app.observability.metrics import metrics
+        metrics.register_source(self.metrics_sources)
 
     async def shutdown(self) -> None:
         await self.stop_all()
@@ -108,6 +110,20 @@ class AppState:
 
     def health(self) -> dict[str, Any]:
         return {pid: rp.runtime.health() for pid, rp in self._projects.items()}
+
+    async def driver_health(self) -> dict[str, Any]:
+        """Health granular por proyecto y driver (§10.5, F2.4c)."""
+        out: dict[str, Any] = {}
+        for pid, rp in self._projects.items():
+            out[pid] = {did: await d.health() for did, d in rp.runtime.drivers().items()}
+        return out
+
+    def metrics_sources(self):
+        """Gauges dinámicos para /metrics (evaluados al hacer scrape)."""
+        yield ("iiot_ws_connected_clients", {}, self.manager.client_count())
+        yield ("iiot_running_projects", {}, len(self._projects))
+        active = sum(len(self.alarms.active_alarms(pid)) for pid in self._projects)
+        yield ("iiot_active_alarms", {}, active)
 
 
 state = AppState()

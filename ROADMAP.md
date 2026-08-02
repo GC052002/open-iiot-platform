@@ -114,7 +114,10 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
     usuarios; exige token+rol si `IIOT_USERS` está configurado); **audit log** de acciones
     críticas (`GET /audit`) con quién/cuándo/anterior→nuevo; `POST /login`; notificadores
     **Telegram/SMTP** (stdlib) enchufables por entorno.
-  - **F2.4c — Observabilidad:** `observability/metrics.py` (Prometheus) + `health.py` granular.
+  - **F2.4c — Observabilidad** ✅ **Completa (79 tests verdes)**: `observability/metrics.py`
+    (registro ligero → formato Prometheus, sin dependencias); `/metrics` con contadores
+    (lecturas, reconexiones, mensajes/overflow WS) + gauges dinámicos (clientes WS, proyectos,
+    alarmas activas) + latencia por driver; `/health/drivers` granular por proyecto/driver.
 - **Ejecución:** implementa Opus (atención a snap7/threading y seguridad); revisan GLM/Gemini. `[dep: F1]`
 
 ### Fase 3 — Frontend (canvas HMI) · *~5–6 j*

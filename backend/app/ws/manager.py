@@ -49,6 +49,9 @@ class ConnectionManager:
         self._subs: dict[SubKey, set[_Client]] = {}
         self._clients: set[_Client] = set()
 
+    def client_count(self) -> int:
+        return len(self._clients)
+
     # -- Ciclo de vida de la conexión ----------------------------------------
     async def connect(self, ws: WebSocket) -> _Client:
         await ws.accept()
@@ -101,6 +104,8 @@ class ConnectionManager:
             try:
                 client.queue.get_nowait()
                 client.dropped += 1
+                from app.observability.metrics import metrics
+                metrics.inc("iiot_ws_overflow_total")
             except asyncio.QueueEmpty:
                 pass
             try:
@@ -118,3 +123,5 @@ class ConnectionManager:
                 await client.ws.send_text(OverflowMsg(dropped=client.dropped).model_dump_json())
                 client.dropped = 0
             await client.ws.send_text(msg.model_dump_json())
+            from app.observability.metrics import metrics
+            metrics.inc("iiot_ws_messages_sent_total")
