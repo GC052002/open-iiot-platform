@@ -154,6 +154,29 @@ Aceptado sin cambios: implementación propia vs `prometheus_client` (histogramas
 `/metrics` abierto (proxy/puerto dedicado en F4); regla de cardinalidad (NUNCA `tag_id`/`address`
 como label). **F2.4c lista para merge — 80 tests verdes. Fase 2.4 completa.**
 
+## F3.0 — Frontend: scaffold + conexión (Opus) · 2026-08-02
+
+Primer bloque de la Fase 3. Frontend `frontend/` (React + TS + Vite + @xyflow/react +
+Zustand) que consume el contrato WS/REST ya fijado, sin renegociarlo.
+
+- Cliente **REST** tipado (`src/api/rest.ts`) + cliente **WS** con reconexión
+  (backoff+jitter) y **re-suscripción** al reconectar (`src/api/ws.ts`).
+- Store de tags en tiempo real (reducer puro `applyTagValues`), sesión persistida en
+  `localStorage`, login opcional (auth opt-in del backend).
+- UI: login, barra de conexión, **tabla de tags en vivo** con sparkline, canvas React
+  Flow (esqueleto con las 3 familias de nodos).
+- **24 tests Vitest verdes** (helpers WS, reducer del store, cliente REST con fetch
+  mockeado, reconexión/re-suscripción del `WsClient`, render de la tabla).
+
+**Bugfix del backend descubierto al integrar (verificación e2e REST+WS contra el
+simulador Modbus):**
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| **CRÍTICA** | ws/manager.py | `_Client` era un `@dataclass` (eq=True) → **unhashable**, pero se usa como clave de `set`/`dict` de enrutado (`_clients`, `_subs`, `per_client`). El WS lanzaba `TypeError` en `connect()` y **cerraba toda conexión** en runtime. Los tests solo cubrían `_enqueue`, nunca `connect`/`subscribe`, así que no se detectó. | ✅ `@dataclass(eq=False)` (identidad por objeto) + regresión: test de hashabilidad y del camino real `connect→subscribe→on_tag_update`. |
+
+**F3.0 lista para merge — backend 82 tests verdes · frontend 24 tests verdes.**
+
 ## Cómo correr
 
 ```bash

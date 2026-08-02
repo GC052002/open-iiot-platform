@@ -120,12 +120,24 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
     alarmas activas) + latencia por driver; `/health/drivers` granular por proyecto/driver.
 - **Ejecución:** implementa Opus (atención a snap7/threading y seguridad); revisan GLM/Gemini. `[dep: F1]`
 
-### Fase 3 — Frontend (canvas HMI) · *~5–6 j*
-- [ ] Scaffold React + React Flow; paleta / canvas / inspector
-- [ ] Cliente WebSocket + store de tags en tiempo real
-- [ ] Persistencia local (LocalStorage / IndexedDB)
-- [ ] Widgets HMI base (tanque, válvula, gráfico) + nodos de driver/lógica
-- [ ] Import/export del JSON de proyecto (mismo `schema_version` que backend)
+### Fase 3 — Frontend (canvas HMI) · *~5–6 j* (sub-fases)
+- **F3.0 — Scaffold + conexión** ✅ **Completa (frontend 24 tests verdes)**
+  - [x] Scaffold React + TS + Vite + `@xyflow/react` + Zustand (`frontend/`)
+  - [x] Cliente WebSocket (reconexión + re-suscripción) + REST tipados, contra el
+        contrato ya fijado (`ws/protocol.py`, `api/`); espejo en `src/api/types.ts`
+  - [x] Store de tags en tiempo real (reducer puro) + persistencia local
+        (`localStorage`: token + `project_id`) + login opcional (auth opt-in)
+  - [x] UI mínima: tabla de tags en vivo (sparkline) + canvas React Flow esqueleto
+  - [x] Bugfix backend al integrar: `_Client` unhashable rompía el WS (Rev en
+        `REVIEW_TASKS.md`; backend 82 tests verdes)
+- **F3.1 — Paleta + canvas editable + inspector**
+  - [ ] Paleta arrastrable (drivers/lógica/widgets) + conexión de nodos
+  - [ ] Inspector de propiedades (IPs, DB/registro, polling, umbrales de alarma)
+- **F3.2 — Widgets HMI + data-binding**
+  - [ ] Widgets base (tanque, válvula, gráfico) con **binding por `tag_id`**
+- **F3.3 — Import/export + LogicNode sandbox**
+  - [ ] Import/export del JSON de proyecto (mismo `schema_version` que backend)
+  - [ ] `LogicNode` con sandbox (asteval; WASM Wasmer/Extism para Python real)
 - **Salida:** diseñar un proceso arrastrando nodos y ver datos en vivo.
 - **Ejecución:** implementa Opus (el contrato WS↔canvas ya está fijado en F1);
   revisan GLM/Gemini. `[dep: F1]` (puede solaparse con F2)
