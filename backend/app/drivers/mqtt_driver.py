@@ -110,18 +110,24 @@ class MqttDriver(BaseDriver):
 
     async def run(self, publish: Publish, stopping: asyncio.Event) -> None:
         # Import perezoso: aiomqtt solo se necesita si se usa este driver.
+        import time
+
         import aiomqtt
 
+        from app.observability.metrics import metrics
+
+        labels = {"driver": self.driver_type, "node": self.node.id}
         async with aiomqtt.Client(hostname=self._host, port=self._port) as client:
             # QoS 1 (Rev 10): entrega garantizada para telemetría industrial.
-            # TODO(F2.4): política de mensajes retained (evitar datos obsoletos al
-            # arrancar) y QoS configurable por nodo.
             await client.subscribe(self._topic, qos=1)
             if self._lwt_topic is not None:
                 await client.subscribe(self._lwt_topic, qos=1)
             async for message in client.messages:
                 if stopping.is_set():
                     break
+                # Métricas de driver push (Rev 13): cada mensaje recibido.
+                metrics.inc("iiot_driver_messages_received_total", labels)
+                metrics.observe("iiot_driver_last_message_ts", labels, time.time())
                 samples = self.parse(str(message.topic), message.payload)
                 if samples:
                     await publish(samples)

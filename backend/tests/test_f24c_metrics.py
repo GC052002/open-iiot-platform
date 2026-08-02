@@ -42,6 +42,25 @@ def test_source_failure_does_not_break_scrape():
     assert "ok_total" in m.render()  # una fuente rota no rompe el render
 
 
+def test_thread_safe_concurrent_inc():
+    # Rev 13: incrementos desde varios hilos (los drivers síncronos usan to_thread).
+    import threading
+
+    m = Metrics()
+
+    def worker():
+        for _ in range(1000):
+            m.inc("iiot_driver_reads_total", {"node": "d1"})
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    # 8 hilos x 1000 = 8000 exactos si no hay carreras.
+    assert 'iiot_driver_reads_total{node="d1"} 8000.0' in m.render()
+
+
 async def test_metrics_endpoint_served():
     from app.main import app
 

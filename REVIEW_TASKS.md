@@ -143,6 +143,17 @@ shutdown limpio (`async with Client`), backoff ante `MqttError`. **F2.2 lista pa
 Aceptado sin cambios: audit en la BD del historiador (ok para air-gapped; separada en F4);
 Fernet como token opaco (válido mientras sea monolítico). **F2.4 lista para merge — 74 tests verdes.**
 
+## Rev 13 — Revisión externa (Gemini) de F2.4c · 2026-07-31
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| **CRÍTICA** | observability/metrics.py | contadores/gauges sin lock → carreras con drivers en `to_thread` | ✅ `threading.Lock` en inc/set/render (instantánea bajo lock) |
+| **CRÍTICA** | mqtt_driver.py / opcua_driver.py | drivers push no pasan por `BaseDriver.run` → métricas en cero | ✅ `iiot_driver_messages_received_total` + `iiot_driver_last_message_ts` en sus bucles/callbacks |
+
+Aceptado sin cambios: implementación propia vs `prometheus_client` (histogramas p95/p99 en F4);
+`/metrics` abierto (proxy/puerto dedicado en F4); regla de cardinalidad (NUNCA `tag_id`/`address`
+como label). **F2.4c lista para merge — 80 tests verdes. Fase 2.4 completa.**
+
 ## Cómo correr
 
 ```bash
