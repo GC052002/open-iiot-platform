@@ -37,13 +37,18 @@ HMI tipo WinCC/Node-RED). Empieza por F3.0 (scaffold React + React Flow + conexi
 backend), o propón primero un mini-diseño de F3 si lo ves necesario.
 ```
 
-## Estado actual (2026-07-31)
+## Estado actual (2026-08-02)
 
 - **Fase 2 COMPLETA.** F0 ✅ · F1 ✅ · F2.0–F2.3 ✅ · monitor web ✅ · **F2.4** (alarmas +
-  seguridad + observabilidad) ✅ — todo en `main` (PRs #1–#17).
-- **Tests:** 80 verdes (`pytest -q`).
-- **Revisiones integradas:** Rev 1–13 (Gemini + GLM).
-- **Siguiente:** **F3 — Frontend visual** (canvas HMI).
+  seguridad + observabilidad) ✅ — todo en `main`.
+- **Fase 3 EN CURSO. F3.0 ✅** (frontend scaffold + conexión WS/REST): `frontend/`
+  (React + TS + Vite + @xyflow/react + Zustand), tabla de tags en vivo, cliente WS con
+  reconexión/re-suscripción, login opcional, persistencia local. **Bugfix backend al
+  integrar:** `_Client` era unhashable y rompía el WS en runtime (ver `REVIEW_TASKS.md`
+  → F3.0).
+- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **24 verdes** (`npm test`).
+- **Revisiones integradas:** Rev 1–13 (Gemini + GLM) + bugfix F3.0.
+- **Siguiente:** **F3.1** — paleta arrastrable + canvas editable + inspector de propiedades.
 
 ## Cómo acceder a GitHub (para el agente del chat nuevo)
 
@@ -69,6 +74,16 @@ uvicorn app.main:app --port 8000          # backend + historiador SQLite (WAL)
 ```
 Para conectar a un PLC real (S7/Modbus/OPC UA) ver `DEMO.md` (runbook + preflight
 `python -m app.tools.plc_check` + checklist TIA Portal).
+
+**Frontend (F3, `frontend/`):**
+```bash
+cd frontend && npm install
+npm run dev        # http://localhost:5173 (proxy a http://localhost:8000)
+npm test           # 24 tests verdes
+npm run build      # type-check + build a dist/ (se sirve desde el backend en prod)
+```
+Con el backend arriba y un proyecto cargado (`POST /projects`), pulsar «Conectar» en
+la UI muestra los tags en vivo. Ver `frontend/README.md`.
 
 ## Qué hay implementado (backend/app) — Fase 2 completa
 
@@ -97,13 +112,15 @@ Para conectar a un PLC real (S7/Modbus/OPC UA) ver `DEMO.md` (runbook + prefligh
   `/metrics`, dashboard `/`.
 - `tools/plc_check.py` — preflight de conectividad a PLC real.
 
-## Próximo paso: F3 — Frontend visual (canvas HMI)
+## Próximo paso: F3.1 — Paleta + canvas editable + inspector
 
 Bloque grande; partir en sub-fases (como F2):
-- **F3.0** — scaffold React + React Flow; store de tags; cliente WS (`/ws`) + REST;
-  login (si `IIOT_USERS`); persistencia local (LocalStorage/IndexedDB).
-- **F3.1** — paleta (drivers/lógica/widgets) + canvas (arrastrar/conectar) + inspector
-  de propiedades (IPs, DB/registro, polling, umbrales de alarma).
+- **F3.0** ✅ — scaffold React + React Flow; store de tags; cliente WS (`/ws`) + REST;
+  login (si `IIOT_USERS`); persistencia local (LocalStorage). **Hecho.**
+- **F3.1** ← **siguiente** — paleta (drivers/lógica/widgets) + canvas (arrastrar/conectar)
+  + inspector de propiedades (IPs, DB/registro, polling, umbrales de alarma). Base ya
+  puesta en `frontend/src/components/FlowCanvas.tsx` (React Flow montado) y en los
+  modelos `DriverNode/LogicNode/WidgetNode` de `src/api/types.ts`.
 - **F3.2** — widgets HMI (tanque, válvula, gráfico) con **data binding por `tag_id`**
   (usar el contrato WS ya fijado; el origen del dato es indiferente).
 - **F3.3** — import/export del JSON de proyecto (mismo `schema_version` que el backend)

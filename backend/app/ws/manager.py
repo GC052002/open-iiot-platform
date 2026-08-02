@@ -31,8 +31,11 @@ _QUEUE_MAXSIZE = 100
 SubKey = tuple[str, str]
 
 
-@dataclass
+@dataclass(eq=False)
 class _Client:
+    # eq=False → identidad por objeto: `__hash__`/`__eq__` heredados de object. El
+    # cliente es la clave de enrutado en `set`/`dict` (_clients, _subs, per_client);
+    # un @dataclass normal (eq=True) es unhashable y rompe el WS en runtime.
     ws: WebSocket
     queue: asyncio.Queue[TagUpdateMsg] = field(
         default_factory=lambda: asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
