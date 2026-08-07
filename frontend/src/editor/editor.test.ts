@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { PALETTE, createNode, defaultParams, type PaletteItem } from "./model";
+import {
+  PALETTE,
+  coerceValue,
+  createNode,
+  defaultParams,
+  paramType,
+  type PaletteItem,
+} from "./model";
 import { buildProject, fromProjectNode, toProjectNode } from "./mapping";
 
 describe("paleta / createNode", () => {
@@ -47,5 +54,27 @@ describe("mapping editor ↔ backend", () => {
     expect(proj.project_id).toBe("p1");
     expect(proj.nodes).toHaveLength(1);
     expect(proj.nodes[0]).toMatchObject({ type: "driver", driver_type: "mqtt" });
+  });
+});
+
+describe("paramType / coerceValue (Rev 14)", () => {
+  it("el esquema conocido gana sobre el valor actual (aunque sea null)", () => {
+    expect(paramType("port", null)).toBe("number");
+    expect(paramType("host", 123)).toBe("string");
+    expect(paramType("tag_id", null)).toBe("string");
+  });
+
+  it("cae al tipo del valor cuando la clave no está en el esquema", () => {
+    expect(paramType("desconocido", 5)).toBe("number");
+    expect(paramType("desconocido", true)).toBe("boolean");
+    expect(paramType("desconocido", "x")).toBe("string");
+  });
+
+  it("coerceValue respeta el tipo destino (no el del input)", () => {
+    expect(coerceValue("5020", "number")).toBe(5020);
+    expect(coerceValue("", "number")).toBe(0);
+    expect(coerceValue("abc", "number")).toBe(0);
+    expect(coerceValue("true", "boolean")).toBe(true);
+    expect(coerceValue("127.0.0.1", "string")).toBe("127.0.0.1");
   });
 });

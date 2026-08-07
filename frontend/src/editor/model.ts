@@ -116,18 +116,44 @@ export function defaultLabel(item: PaletteItem): string {
   return item.label;
 }
 
+export type ParamType = "number" | "boolean" | "string";
+
 /**
- * Convierte el texto de un input al tipo del valor original (para editar params
- * sin cambiar su tipo). Números vacíos/no numéricos → 0; booleanos vía checkbox.
+ * Esquema de tipos de parámetros conocidos (Rev 14, MEDIA). El inspector infería el
+ * tipo del valor actual, lo que rompía el tipado si un param llegaba como `null`
+ * (p. ej. desde el editor JSON): quedaba como string y el backend lo rechazaba. Con
+ * un esquema explícito, un `port` es número aunque su valor actual sea null/"".
  */
-export function coerceLike(raw: string, sample: unknown): unknown {
-  if (typeof sample === "number") {
+const PARAM_TYPES: Record<string, ParamType> = {
+  port: "number",
+  unit: "number",
+  polling_rate: "number",
+  rack: "number",
+  slot: "number",
+  a: "number",
+  b: "number",
+  deadband: "number",
+  window: "number",
+  host: "string",
+  endpoint: "string",
+  tag_id: "string",
+};
+
+/** Tipo de un parámetro: esquema conocido primero, si no, se infiere del valor. */
+export function paramType(key: string, sample: unknown): ParamType {
+  if (PARAM_TYPES[key]) return PARAM_TYPES[key];
+  if (typeof sample === "number") return "number";
+  if (typeof sample === "boolean") return "boolean";
+  return "string";
+}
+
+/** Convierte el texto de un input al tipo indicado (sin depender del valor actual). */
+export function coerceValue(raw: string, type: ParamType): unknown {
+  if (type === "number") {
     const n = Number(raw);
     return raw.trim() === "" || Number.isNaN(n) ? 0 : n;
   }
-  if (typeof sample === "boolean") {
-    return raw === "true";
-  }
+  if (type === "boolean") return raw === "true";
   return raw;
 }
 

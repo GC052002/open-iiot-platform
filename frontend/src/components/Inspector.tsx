@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { coerceLike, defaultParams, SUBTYPES } from "../editor/model";
+import { coerceValue, defaultParams, paramType, SUBTYPES } from "../editor/model";
 import { useProjectStore } from "../store/projectStore";
 
 export function Inspector() {
@@ -28,8 +28,8 @@ export function Inspector() {
 
   const { kind, label, subtype, params } = node.data;
 
-  function setParam(key: string, raw: string, sample: unknown) {
-    setNodeParams(selectedId!, { ...params, [key]: coerceLike(raw, sample) });
+  function setParam(key: string, raw: string, value: unknown) {
+    setNodeParams(selectedId!, { ...params, [key]: coerceValue(raw, paramType(key, value)) });
   }
 
   function changeSubtype(newSubtype: string) {
@@ -65,24 +65,27 @@ export function Inspector() {
 
       <div className="field-group-title">Parámetros</div>
       {Object.keys(params).length === 0 && <div className="inspector-empty">Sin parámetros.</div>}
-      {Object.entries(params).map(([key, value]) => (
-        <label className="field" key={key}>
-          <span>{key}</span>
-          {typeof value === "boolean" ? (
-            <input
-              type="checkbox"
-              checked={value}
-              onChange={(e) => setParam(key, String(e.target.checked), value)}
-            />
-          ) : (
-            <input
-              type={typeof value === "number" ? "number" : "text"}
-              value={value === null || value === undefined ? "" : String(value)}
-              onChange={(e) => setParam(key, e.target.value, value)}
-            />
-          )}
-        </label>
-      ))}
+      {Object.entries(params).map(([key, value]) => {
+        const t = paramType(key, value);
+        return (
+          <label className="field" key={key}>
+            <span>{key}</span>
+            {t === "boolean" ? (
+              <input
+                type="checkbox"
+                checked={value === true}
+                onChange={(e) => setParam(key, String(e.target.checked), value)}
+              />
+            ) : (
+              <input
+                type={t === "number" ? "number" : "text"}
+                value={value === null || value === undefined ? "" : String(value)}
+                onChange={(e) => setParam(key, e.target.value, value)}
+              />
+            )}
+          </label>
+        );
+      })}
 
       <AdvancedParams
         key={node.id}

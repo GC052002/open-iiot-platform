@@ -17,8 +17,44 @@ import {
   type NodeChange,
 } from "@xyflow/react";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import type { AppNode, EditorNodeData } from "../editor/model";
+
+/**
+ * Persiste sólo los campos de dominio del nodo, descartando el estado transitorio
+ * de React Flow (`selected`, `dragging`, `measured`, `width`/`height`…). Rev 14
+ * (MEDIA): si no, al recargar un nodo podía quedar bloqueado como "seleccionado".
+ */
+export function sanitizeNodes(nodes: AppNode[]): AppNode[] {
+  return nodes.map((n) => ({ id: n.id, type: n.type, position: n.position, data: n.data }));
+}
+
+/**
+ * Storage con debounce sobre localStorage. Rev 14 (BLOCKER): React Flow emite un
+ * cambio por cada píxel de arrastre; escribir en localStorage síncronamente en cada
+ * uno congela el navegador. Agrupamos las escrituras y volcamos tras `ms` de calma.
+ */
+export function debouncedStorage(ms = 500): StateStorage {
+  const pending = new Map<string, string>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const flush = () => {
+    timer = null;
+    for (const [k, v] of pending) localStorage.setItem(k, v);
+    pending.clear();
+  };
+  return {
+    getItem: (key) => localStorage.getItem(key),
+    setItem: (key, value) => {
+      pending.set(key, value);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(flush, ms);
+    },
+    removeItem: (key) => {
+      pending.delete(key);
+      localStorage.removeItem(key);
+    },
+  };
+}
 
 export interface ProjectMeta {
   project_id: string;
@@ -90,6 +126,10 @@ export const useProjectStore = create<ProjectStore>()(
         set((s) => ({ nodes, edges, meta: meta ?? s.meta, selectedId: null })),
       clear: () => set({ nodes: [], edges: [], selectedId: null }),
     }),
-    { name: "iiot.project", partialize: (s) => ({ nodes: s.nodes, edges: s.edges, meta: s.meta }) },
+    {
+      name: "iiot.project",
+      storage: createJSONStorage(() => debouncedStorage(500)),
+      partialize: (s) => ({ nodes: sanitizeNodes(s.nodes), edges: s.edges, meta: s.meta }),
+    },
   ),
 );

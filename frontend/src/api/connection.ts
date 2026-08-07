@@ -14,6 +14,7 @@ import { listTags } from "./rest";
 import type { ServerMessage } from "./types";
 import { WsClient, type WsStatus } from "./ws";
 import { useConnectionStore } from "../store/connectionStore";
+import { useSessionStore } from "../store/sessionStore";
 import { useTagStore } from "../store/tagStore";
 
 export class ConnectionController {
@@ -45,6 +46,7 @@ export class ConnectionController {
       token,
       onStatus: (s: WsStatus) => useConnectionStore.getState().setStatus(s),
       onMessage: (m: ServerMessage) => this.handleMessage(m),
+      onAuthError: (code) => this.handleAuthError(code),
     });
     this.ws.connect();
     if (tagIds.length > 0) this.ws.subscribe(projectId, tagIds);
@@ -67,15 +69,34 @@ export class ConnectionController {
     }
   }
 
-  /** Escribe un valor a un tag (RBAC/audit en el backend). */
-  write(tagId: string, value: unknown, token?: string | null): void {
-    this.ws?.write({
+  /**
+   * Escribe un valor a un tag (RBAC/audit en el backend). Rev 14 (BLOCKER): si el
+   * WS no está abierto (reconectando/caído) **rechaza** el comando y lo hace visible
+   * en la UI, en vez de perder el setpoint en silencio. Devuelve `true` si se envió.
+   */
+  write(tagId: string, value: unknown, token?: string | null): boolean {
+    if (!this.ws || !this.ws.isOpen()) {
+      useConnectionStore
+        .getState()
+        .setError(`comando NO enviado (${tagId}): sin conexión con el backend`);
+      return false;
+    }
+    return this.ws.write({
       project_id: this.projectId,
       tag_id: tagId,
       value,
       request_id: crypto.randomUUID(),
       token,
     });
+  }
+
+  /** Sesión caducada/no autorizada: cerrar, limpiar token y avisar (Rev 14). */
+  private handleAuthError(code: number): void {
+    this.disconnect();
+    useSessionStore.getState().clearSession();
+    useConnectionStore
+      .getState()
+      .setError(`sesión no autorizada o expirada (código ${code}). Inicia sesión de nuevo.`);
   }
 
   disconnect(): void {
