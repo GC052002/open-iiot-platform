@@ -41,7 +41,7 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
 
 - **Fase 2 COMPLETA.** F0 ✅ · F1 ✅ · F2.0–F2.3 ✅ · monitor web ✅ · **F2.4** (alarmas +
   seguridad + observabilidad) ✅ — todo en `main`.
-- **Fase 3 EN CURSO. F3.0 ✅ · F3.1 ✅**
+- **Fase 3 EN CURSO. F3.0 ✅ · F3.1 ✅ · F3.2 ✅**
   - **F3.0** (scaffold + conexión WS/REST): `frontend/` (React + TS + Vite +
     @xyflow/react + Zustand), tabla de tags en vivo, cliente WS con reconexión/
     re-suscripción, login opcional, persistencia local. **Bugfix backend:** `_Client`
@@ -49,12 +49,14 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
   - **F3.1** (editor visual): paleta arrastrable + canvas editable + inspector de
     propiedades; modelo uniforme del editor con mapping puro (round-trip) a los
     `DriverNode/LogicNode/WidgetNode` del backend; diseño persistido en `localStorage`.
-- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **46 verdes** (`npm test`).
-- **Revisiones integradas:** Rev 1–14 (Gemini + GLM). **Rev 14** endureció F3.0/F3.1:
-  escritura de comandos sin pérdida silenciosa, persistencia con debounce + sin estado
-  transitorio, logout al expirar la sesión, esquema de tipos en el inspector.
-- **Siguiente:** **F3.2** — widgets HMI (tanque/válvula/gráfico) con **data-binding por
-  `tag_id`** (usar el contrato WS ya fijado; el origen del dato es indiferente).
+  - **F3.2** (widgets en vivo): widgets HMI (tanque/válvula/gráfico) que **leen el valor
+    en vivo** del `tagStore` por `props.tag_id`; binding en el inspector como select de
+    los tags en vivo. Verificado e2e (tanque enlazado a `nivel` reflejando el simulador).
+- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **53 verdes** (`npm test`).
+- **Revisiones integradas:** Rev 1–14 (Gemini + GLM). **Rev 14** endureció F3.0/F3.1.
+- **Siguiente:** **F3.3** — import/export del JSON de proyecto (el mapping ya está;
+  falta un **editor de Tags** para definir data points id/driver/address) + `LogicNode`
+  con sandbox (asteval; WASM Wasmer/Extism para Python real).
 
 ## Cómo acceder a GitHub (para el agente del chat nuevo)
 
@@ -118,17 +120,23 @@ la UI muestra los tags en vivo. Ver `frontend/README.md`.
   `/metrics`, dashboard `/`.
 - `tools/plc_check.py` — preflight de conectividad a PLC real.
 
-## Próximo paso: F3.2 — Widgets HMI + data-binding por `tag_id`
+## Próximo paso: F3.3 — Import/export del proyecto + editor de Tags + LogicNode sandbox
 
 Bloque grande; partir en sub-fases (como F2):
 - **F3.0** ✅ — scaffold + store de tags + cliente WS/REST + login + persistencia local.
 - **F3.1** ✅ — paleta arrastrable + canvas editable + inspector. El editor produce el
-  JSON del backend vía `src/editor/mapping.ts` (`buildProject`), listo para F3.3.
-- **F3.2** ← **siguiente** — widgets HMI (tanque, válvula, gráfico) que **leen el valor
-  en vivo** del `tagStore` por su `props.tag_id` (ya editable en el inspector). Base:
-  `src/editor/nodeTypes.tsx` (nodo widget) + `src/store/tagStore.ts` (valores en vivo).
-  Nota: aún no hay UI para **definir Tags** (los data points): en F3.2/F3.3 hay que
-  añadir un editor de tags (id/driver/address) para que `POST /projects` tenga qué leer.
+  JSON del backend vía `src/editor/mapping.ts` (`buildProject`).
+- **F3.2** ✅ — widgets HMI que leen el valor en vivo por `tag_id`; binding en el
+  inspector como select de tags en vivo. Base: `src/editor/widgets.tsx`.
+- **F3.3** ← **siguiente**:
+  - **Editor de Tags** (data points): definir id/name/driver_id/address/data_type en el
+    proyecto (hoy sólo se pueden enlazar tags que ya llegan en vivo). `buildProject` ya
+    acepta la lista; falta la UI + persistirlos en `projectStore`.
+  - **Import/export** del JSON de proyecto (mismo `schema_version`; el mapping
+    `fromProjectNode`/`buildProject` ya existe y tiene round-trip probado). Botón para
+    **enviar el diseño al backend** (`POST /projects`) y cerrar el lazo diseño→vivo.
+  - **`LogicNode` sandbox**: asteval para cálculos; WASM (Wasmer/Extism) para Python
+    real (Docker descartado por cold-start).
 - **F3.2** — widgets HMI (tanque, válvula, gráfico) con **data binding por `tag_id`**
   (usar el contrato WS ya fijado; el origen del dato es indiferente).
 - **F3.3** — import/export del JSON de proyecto (mismo `schema_version` que el backend)

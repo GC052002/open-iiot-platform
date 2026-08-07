@@ -37,6 +37,16 @@ la sesión** (cierre WS por auth), y esquema de tipos de parámetros en el inspe
 > **Seguridad en producción:** el token viaja en la URL del WS (`?token=`), por lo que
 > **producción DEBE servirse sobre WSS/TLS** para que no quede en logs de proxies.
 
+**F3.2 — widgets HMI con data-binding en vivo** ✅
+- [x] Widgets **tanque** (nivel), **válvula** (abierta/cerrada) y **gráfico** (tendencia)
+      que leen el valor en vivo del `tagStore` por `props.tag_id` (`src/editor/widgets.tsx`).
+- [x] Binding en el inspector: `tag_id` como **select de los tags en vivo** del backend.
+- [x] Helpers puros (`tankFillPct`, `valveState`) testeados. Tests (Vitest): **53 verdes**.
+
+> **Probar en vivo:** con el backend + un proyecto cargado, pulsa **Conectar**, arrastra
+> un **Tanque** al lienzo, selecciónalo y elige el tag en **«tag enlazado»** → el widget
+> refleja el valor en tiempo real. El origen (Modbus/MQTT/S7/OPC UA) es indiferente.
+
 Próximo (ver `../CONTINUATION.md`): **F3.2** widgets HMI con data-binding por
 `tag_id`; **F3.3** import/export del JSON de proyecto + `LogicNode` sandbox.
 

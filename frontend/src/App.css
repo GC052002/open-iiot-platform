@@ -284,3 +284,30 @@ button.danger { color: #f85149; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; resize: vertical;
 }
 .advanced button { margin-top: 8px; }
+
+/* --- Widgets HMI en vivo (F3.2) --- */
+.wg-empty { color: var(--muted); font-size: 11px; margin-top: 4px; }
+.wg-bad { opacity: 0.55; }
+.wg-value { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; margin-top: 4px; text-align: center; }
+
+/* Tanque */
+.wg-tank { display: flex; flex-direction: column; align-items: center; margin-top: 6px; }
+.wg-tank-body {
+  width: 46px; height: 56px; border: 2px solid var(--muted); border-radius: 6px;
+  background: #0d1117; overflow: hidden; display: flex; align-items: flex-end;
+}
+.wg-tank-fill { width: 100%; background: linear-gradient(#2ea043, #1a7f37); transition: height .3s ease; }
+
+/* Válvula */
+.wg-valve { display: flex; align-items: center; gap: 8px; margin-top: 8px; justify-content: center; }
+.wg-valve-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); }
+.wg-valve-open .wg-valve-dot { background: var(--good); box-shadow: 0 0 8px var(--good); }
+.wg-valve-closed .wg-valve-dot { background: var(--bad); }
+.wg-valve-unknown .wg-valve-dot { background: var(--muted); }
+.wg-valve-label { font-size: 12px; font-weight: 600; }
+.wg-valve-open .wg-valve-label { color: var(--good); }
+.wg-valve-closed .wg-valve-label { color: var(--bad); }
+.wg-valve-unknown .wg-valve-label { color: var(--muted); }
+
+/* Gráfico */
+.wg-chart { display: flex; flex-direction: column; align-items: center; margin-top: 6px; }

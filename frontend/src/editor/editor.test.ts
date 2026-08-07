@@ -27,8 +27,10 @@ describe("paleta / createNode", () => {
     expect(n.data.params).toEqual({ host: "127.0.0.1", port: 502, unit: 1, polling_rate: 1.0 });
   });
 
-  it("defaultParams del widget incluye binding tag_id vacío", () => {
-    expect(defaultParams("widget", "tank")).toEqual({ tag_id: "" });
+  it("defaultParams del widget incluye binding tag_id vacío (+ rango en tank)", () => {
+    expect(defaultParams("widget", "tank")).toEqual({ tag_id: "", min: 0, max: 100 });
+    expect(defaultParams("widget", "chart")).toEqual({ tag_id: "" });
+    expect(defaultParams("widget", "valve")).toMatchObject({ tag_id: "", open_value: 1 });
   });
 });
 

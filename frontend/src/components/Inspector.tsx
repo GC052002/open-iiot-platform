@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { coerceValue, defaultParams, paramType, SUBTYPES } from "../editor/model";
+import { useConnectionStore } from "../store/connectionStore";
 import { useProjectStore } from "../store/projectStore";
 
 export function Inspector() {
@@ -17,6 +18,8 @@ export function Inspector() {
   const updateNodeData = useProjectStore((s) => s.updateNodeData);
   const setNodeParams = useProjectStore((s) => s.setNodeParams);
   const removeNode = useProjectStore((s) => s.removeNode);
+  // F3.2: tags en vivo del backend (snapshot REST) para el binding de widgets.
+  const liveRows = useConnectionStore((s) => s.rows);
 
   if (!node || !selectedId) {
     return (
@@ -67,6 +70,28 @@ export function Inspector() {
       {Object.keys(params).length === 0 && <div className="inspector-empty">Sin parámetros.</div>}
       {Object.entries(params).map(([key, value]) => {
         const t = paramType(key, value);
+        // F3.2: binding de widget → select de tags en vivo (con fallback a texto).
+        if (kind === "widget" && key === "tag_id") {
+          const current = typeof value === "string" ? value : "";
+          const known = liveRows.some((r) => r.id === current);
+          return (
+            <label className="field" key={key}>
+              <span>tag enlazado</span>
+              <select
+                value={current}
+                onChange={(e) => setNodeParams(selectedId, { ...params, tag_id: e.target.value })}
+              >
+                <option value="">— sin binding —</option>
+                {current && !known && <option value={current}>{current} (no en vivo)</option>}
+                {liveRows.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.id})
+                  </option>
+                ))}
+              </select>
+            </label>
+          );
+        }
         return (
           <label className="field" key={key}>
             <span>{key}</span>
