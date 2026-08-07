@@ -71,6 +71,12 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
 
 ## Cómo correr / probar (Linux)
 
+> **Python soportado: 3.11 – 3.13.** Python **3.14 no está soportado** todavía:
+> cambia el manejo de anotaciones (PEP 649) y la última Pydantic (2.13.x) rompe al
+> importar (R7, `pyproject.toml` fija `requires-python = ">=3.11,<3.14"`; el install
+> falla claro en vez de dar un 500 en runtime). En Windows, instala Python 3.13
+> (python.org) y usa `py -3.13 -m venv .venv`.
+
 ```bash
 pip install -e ".[dev]"          # + asegúrate de tener 'cryptography' funcional
 pytest -q                         # 80 passed

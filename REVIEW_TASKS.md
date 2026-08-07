@@ -243,6 +243,21 @@ Sin cambios en el backend.
 
 **F3.2 lista para merge — frontend 53 tests verdes · backend 82.**
 
+## R7 — Compatibilidad de Python (techo <3.14) · 2026-08-07
+
+Reportado desde una prueba en Windows con Python 3.14 (backend daba 500 / no arrancaba).
+Reproducido en 3.14.0rc2: **Pydantic 2.13.4 (la última) rompe al importar en 3.14** —
+`AssertionError` en `pydantic/_internal/_typing_extra.py:eval_type_backport` (PEP 649
+cambia el manejo de anotaciones y el fallback de Pydantic asume `typing.ForwardRef`).
+Sin release de Pydantic que lo arregle aún. Verificado **OK en 3.11/3.12/3.13**.
+
+| # | Archivo | Issue | Estado |
+|---|---|---|---|
+| R7 | pyproject.toml | Python 3.14 rompe el stack FastAPI/Pydantic (falla al importar → 500/arranque). | ✅ `requires-python = ">=3.11,<3.14"` (falla en el install con mensaje claro, no en runtime) + documentado en CONTINUATION/DEMO. Se subirá el techo cuando Pydantic soporte 3.14. |
+
+Decisión alineada con §0.6 (precedente del pin de pymodbus): no pelear con una librería
+en transición; fijar versión soportada y seguir.
+
 ## Cómo correr
 
 ```bash
