@@ -4,6 +4,10 @@
  * Responsabilidades:
  *  - Handshake con token vía query param (`?token=...`) — el backend cachea el rol
  *    en el handshake (Rev 12), así que el WriteMsg no lo reenvía en el hot path.
+ *    SEGURIDAD (Rev 14, BAJA): el token viaja en la URL; **producción DEBE usar WSS**
+ *    (TLS) para que no quede en logs de proxies/routers. En una futura versión se
+ *    puede mover a un frame de handshake tras abrir el socket, pero eso cambia el
+ *    contrato con el backend (hoy fijado en `?token=`).
  *  - Reconexión automática con backoff exponencial + jitter.
  *  - Re-suscripción idempotente al reconectar (mantiene el set deseado de tags).
  *  - Parseo/validación laxa de los mensajes servidor→cliente.
@@ -17,6 +21,15 @@ import type { ClientMessage, ServerMessage, WriteMsg } from "./types";
 export type WsStatus = "idle" | "connecting" | "open" | "closed";
 
 const SERVER_TYPES = new Set(["tag_update", "ack", "overflow", "error"]);
+
+/**
+ * Códigos de cierre que indican fallo de autenticación/autorización: no tiene
+ * sentido reconectar (el token es inválido/expiró). 1008 = policy violation, el
+ * que usa el backend al rechazar el handshake (main.py). 4001/4401 = convención
+ * de app para "auth". Rev 14 (BLOCKER/MEDIA): evita el bucle infinito de
+ * reconexiones fallidas cuando la sesión caduca.
+ */
+const AUTH_CLOSE_CODES = new Set([1008, 4001, 4401]);
 
 /** Construye la URL del WS a partir del origen actual (ws/wss) + token opcional. */
 export function buildWsUrl(location: { protocol: string; host: string }, token?: string | null): string {
@@ -53,6 +66,8 @@ export interface WsClientOptions {
   token?: string | null;
   onMessage?: (msg: ServerMessage) => void;
   onStatus?: (status: WsStatus) => void;
+  /** El servidor cerró por auth (token inválido/expirado): no se reconecta. */
+  onAuthError?: (code: number) => void;
   /** Origen; por defecto `window.location`. Inyectable para tests. */
   location?: { protocol: string; host: string };
   /** Factoría de WebSocket; por defecto `new WebSocket(url)`. Inyectable para tests. */
@@ -73,6 +88,7 @@ export class WsClient {
   private readonly token?: string | null;
   private readonly onMessage?: (msg: ServerMessage) => void;
   private readonly onStatus?: (status: WsStatus) => void;
+  private readonly onAuthError?: (code: number) => void;
   private readonly location: { protocol: string; host: string };
   private readonly wsFactory: WsFactory;
 
@@ -80,6 +96,7 @@ export class WsClient {
     this.token = opts.token;
     this.onMessage = opts.onMessage;
     this.onStatus = opts.onStatus;
+    this.onAuthError = opts.onAuthError;
     this.location = opts.location ?? window.location;
     this.wsFactory = opts.wsFactory ?? ((url) => new WebSocket(url));
   }
@@ -109,18 +126,22 @@ export class WsClient {
       const msg = parseServerMessage(String(ev.data));
       if (msg) this.onMessage?.(msg);
     };
-    ws.onclose = () => {
+    ws.onclose = (ev: CloseEvent) => {
       this.ws = null;
       this.setStatus("closed");
-      if (!this.closedByUser) this.scheduleReconnect();
+      if (this.closedByUser) return;
+      // Cierre por auth (token inválido/expirado): no reconectar; avisar arriba
+      // para forzar logout (Rev 14). Cualquier otro cierre → backoff.
+      if (AUTH_CLOSE_CODES.has(ev?.code)) {
+        this.closedByUser = true;
+        this.onAuthError?.(ev.code);
+        return;
+      }
+      this.scheduleReconnect();
     };
     ws.onerror = () => {
-      // El navegador dispara onclose tras onerror; ahí se agenda la reconexión.
-      try {
-        ws.close();
-      } catch {
-        /* ya cerrado */
-      }
+      // No forzamos ws.close() aquí (Rev 14, evita cierres dobles): el navegador
+      // dispara onclose tras onerror y toda la limpieza/reconexión vive allí.
     };
   }
 
@@ -168,9 +189,18 @@ export class WsClient {
     this.send({ type: "unsubscribe", project_id: projectId, tag_ids: tagIds });
   }
 
-  /** Solicita una escritura de tag (RBAC/audit se aplican en el backend). */
-  write(msg: Omit<WriteMsg, "type">): void {
-    this.send({ type: "write", ...msg });
+  /**
+   * Solicita una escritura de tag (RBAC/audit en el backend). Devuelve `false` si
+   * el socket no está abierto: el comando **no** se encola (Rev 14, BLOCKER) — un
+   * setpoint no puede evaporarse en silencio; quien llama debe avisar al operador.
+   */
+  write(msg: Omit<WriteMsg, "type">): boolean {
+    return this.send({ type: "write", ...msg });
+  }
+
+  /** ¿Hay socket abierto para enviar comandos ahora mismo? */
+  isOpen(): boolean {
+    return this.status === "open";
   }
 
   private resubscribeAll(): void {

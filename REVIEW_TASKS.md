@@ -200,6 +200,26 @@ el backend (el editor es 100% cliente).
 
 **F3.1 lista para merge — frontend 39 tests verdes · backend sin cambios (82).**
 
+## Rev 14 — Revisión externa (Gemini + GLM) de F3.0 + F3.1 · 2026-08-07
+
+Revisión consolidada de la Fase 3. La arquitectura base (modelo uniforme, WS singleton,
+mapping puro, `@dataclass(eq=False)`) se validó como correcta. Hallazgos integrados:
+
+| # | Severidad | Archivo | Issue | Estado |
+|---|---|---|---|---|
+| 1 | **BLOCKER** | api/ws.ts · connection.ts | Pérdida **silenciosa** de comandos de escritura: si el WS reconecta, `write()` devolvía void y el setpoint se evaporaba sin avisar (crítico en SCADA). | ✅ `WsClient.write()` devuelve `bool` + `isOpen()`; `ConnectionController.write()` **rechaza** el comando y lo hace visible (`connectionStore.setError`) si el socket no está abierto. |
+| 2 | **BLOCKER** | store/projectStore.ts | Spam de escritura a `localStorage`: React Flow emite un cambio por píxel arrastrado; el `persist` síncrono congelaba el navegador. | ✅ `storage` con **debounce** (500 ms, agrupa y vuelca en calma) vía `createJSONStorage(debouncedStorage)`. |
+| 3 | MEDIA | api/ws.ts | Token expirado → **bucle infinito** de reconexiones fallidas. | ✅ `onclose` detecta códigos de auth (1008/4001/4401) → `onAuthError` (no reconecta); `ConnectionController` fuerza logout (`clearSession`) + aviso. |
+| 4 | MEDIA | store/projectStore.ts | Persistía estado transitorio de UI (`selected`/`dragging`/`width`) → nodo "bloqueado" al recargar. | ✅ `partialize` con `sanitizeNodes` (solo `id`/`type`/`position`/`data`). |
+| 5 | MEDIA | editor/model.ts | `coerceLike` infería el tipo del **valor actual**: un param `null` degradaba a string y rompía el tipado del backend. | ✅ **Esquema de tipos** `PARAM_TYPES` + `paramType()`/`coerceValue()` (el esquema manda; el valor solo es fallback). |
+| 6 | BAJA | api/ws.ts | `onerror` forzaba `ws.close()` → posible doble cierre. | ✅ `onerror` vacío (log); toda la limpieza/reconexión vive en `onclose`. |
+| 7 | BAJA | api/ws.ts | Token en la URL del WS (queda en logs si no hay TLS). | ✅ Documentado: **producción exige WSS**; mover a frame de handshake se difiere (cambiaría el contrato backend, hoy `?token=`). |
+
+Aceptado sin reabrir (validado como correcto por los revisores): modelo uniforme
+`EditorNodeData`, `ConnectionController` singleton, backoff+jitter+re-suscripción,
+y el bugfix `@dataclass(eq=False)`. **F3.0+F3.1 con Rev 14 — frontend 46 tests verdes ·
+backend 82.**
+
 ## Cómo correr
 
 ```bash

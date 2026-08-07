@@ -49,8 +49,10 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
   - **F3.1** (editor visual): paleta arrastrable + canvas editable + inspector de
     propiedades; modelo uniforme del editor con mapping puro (round-trip) a los
     `DriverNode/LogicNode/WidgetNode` del backend; diseño persistido en `localStorage`.
-- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **39 verdes** (`npm test`).
-- **Revisiones integradas:** Rev 1–13 (Gemini + GLM) + bugfix F3.0.
+- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **46 verdes** (`npm test`).
+- **Revisiones integradas:** Rev 1–14 (Gemini + GLM). **Rev 14** endureció F3.0/F3.1:
+  escritura de comandos sin pérdida silenciosa, persistencia con debounce + sin estado
+  transitorio, logout al expirar la sesión, esquema de tipos en el inspector.
 - **Siguiente:** **F3.2** — widgets HMI (tanque/válvula/gráfico) con **data-binding por
   `tag_id`** (usar el contrato WS ya fijado; el origen del dato es indiferente).
 

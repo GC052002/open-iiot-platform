@@ -27,7 +27,15 @@ El único punto donde vive ese contrato en el frontend es `src/api/types.ts`.
       `DriverNode/LogicNode/WidgetNode` del backend (`src/editor/mapping.ts`) —
       round-trip probado (deja F3.3 import/export casi hecho).
 - [x] Diseño persistido en `localStorage` (`src/store/projectStore.ts`).
-- [x] Tests (Vitest): **39 verdes**.
+- [x] Tests (Vitest): **46 verdes** (incluye Rev 14).
+
+**Rev 14 (revisión externa Gemini + GLM)** — endurecido: escritura de comandos que
+**no se pierde en silencio** (rechazo visible si el WS no está abierto), persistencia
+del diseño con **debounce** y sin estado transitorio, logout automático al **expirar
+la sesión** (cierre WS por auth), y esquema de tipos de parámetros en el inspector.
+
+> **Seguridad en producción:** el token viaja en la URL del WS (`?token=`), por lo que
+> **producción DEBE servirse sobre WSS/TLS** para que no quede en logs de proxies.
 
 Próximo (ver `../CONTINUATION.md`): **F3.2** widgets HMI con data-binding por
 `tag_id`; **F3.3** import/export del JSON de proyecto + `LogicNode` sandbox.

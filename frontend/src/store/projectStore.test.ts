@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { useProjectStore } from "./projectStore";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { debouncedStorage, sanitizeNodes, useProjectStore } from "./projectStore";
 import { createNode, type PaletteItem } from "../editor/model";
 
 const DRV: PaletteItem = { kind: "driver", subtype: "modbus_tcp", label: "Modbus", icon: "🔌" };
@@ -55,5 +55,41 @@ describe("projectStore", () => {
     st.onConnect({ source: "a", target: "b", sourceHandle: null, targetHandle: null });
     const e = useProjectStore.getState().edges[0];
     expect(e).toMatchObject({ source: "a", target: "b" });
+  });
+});
+
+describe("sanitizeNodes (Rev 14)", () => {
+  it("descarta estado transitorio de React Flow, conserva dominio", () => {
+    const n = { ...createNode(DRV, { x: 3, y: 4 }, "n1"), selected: true, dragging: true, width: 120 };
+    const [clean] = sanitizeNodes([n as never]);
+    expect(clean).toEqual({ id: "n1", type: "driver", position: { x: 3, y: 4 }, data: n.data });
+    expect("selected" in clean).toBe(false);
+    expect("dragging" in clean).toBe(false);
+  });
+});
+
+describe("debouncedStorage (Rev 14)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("agrupa escrituras y sólo vuelca tras el periodo de calma", () => {
+    vi.useFakeTimers();
+    const store: Record<string, string> = {};
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store[k] ?? null,
+      setItem: (k: string, v: string) => {
+        store[k] = v;
+      },
+      removeItem: (k: string) => {
+        delete store[k];
+      },
+    });
+    const s = debouncedStorage(500);
+    s.setItem("k", "1");
+    s.setItem("k", "2");
+    s.setItem("k", "3");
+    expect(store.k).toBeUndefined(); // aún no volcó
+    vi.advanceTimersByTime(500);
+    expect(store.k).toBe("3"); // una sola escritura, la última
+    vi.unstubAllGlobals();
   });
 });
