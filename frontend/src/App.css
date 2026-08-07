@@ -30,18 +30,71 @@
   min-height: 0;
 }
 
-.app-side {
-  width: 340px;
-  min-width: 260px;
+/* --- Layout de 3 columnas: paleta | canvas | inspector --- */
+.col-left {
+  width: 250px;
+  min-width: 220px;
   border-right: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.col-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.col-right {
+  width: 320px;
+  min-width: 280px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
   overflow-y: auto;
+}
+
+.side-tags {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+}
+
+.side-title {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 12px 4px;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
 
-.app-canvas {
+.canvas-wrap {
   flex: 1;
-  min-width: 0;
+  min-height: 0;
   position: relative;
+}
+
+.canvas-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--muted);
+  font-size: 14px;
+  pointer-events: none;
+  text-align: center;
 }
 
 /* --- Barra de conexión --- */
@@ -151,3 +204,83 @@
 .react-flow__attribution {
   background: transparent;
 }
+
+/* --- Paleta --- */
+.palette {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.palette-title {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-bottom: 5px;
+  background: #0d1117;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 7px;
+  font-size: 13px;
+  cursor: grab;
+  user-select: none;
+}
+.palette-item:hover { border-color: var(--accent); }
+.palette-item:active { cursor: grabbing; }
+.pi-driver { border-left-color: #2f81f7; }
+.pi-logic { border-left-color: #d29922; }
+.pi-widget { border-left-color: #2ea043; }
+.palette-icon { font-size: 15px; }
+.palette-hint { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+/* --- Nodos custom del canvas --- */
+.rf-node {
+  background: #171b22;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 12px;
+  min-width: 150px;
+  color: var(--txt);
+}
+.rf-node-title { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; }
+.rf-node-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-node-sub { font-size: 11px; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.4px; }
+.rf-node-summary { color: var(--muted); font-size: 11px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+/* --- Inspector --- */
+.inspector { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.inspector-empty { color: var(--muted); font-size: 13px; padding: 20px 0; text-align: center; }
+.inspector-head { display: flex; align-items: center; gap: 8px; }
+.inspector-id { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; flex: 1; }
+.kind-tag {
+  font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.kt-driver { background: rgba(47,129,247,.15); color: #2f81f7; }
+.kt-logic { background: rgba(210,153,34,.15); color: #d29922; }
+.kt-widget { background: rgba(46,160,67,.15); color: #2ea043; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field > span { color: var(--muted); font-size: 12px; }
+.field input, .field select { width: 100%; }
+.field input[type="checkbox"] { width: auto; }
+.field-group-title {
+  color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  border-top: 1px solid var(--line); padding-top: 10px; margin-top: 2px;
+}
+button.danger { color: #f85149; }
+.advanced { border-top: 1px solid var(--line); padding-top: 8px; }
+.advanced summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+.advanced textarea {
+  width: 100%; margin-top: 8px; background: #0d1117; color: var(--txt);
+  border: 1px solid var(--line); border-radius: 7px; padding: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; resize: vertical;
+}
+.advanced button { margin-top: 8px; }

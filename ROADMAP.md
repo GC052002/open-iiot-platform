@@ -130,9 +130,12 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
   - [x] UI mínima: tabla de tags en vivo (sparkline) + canvas React Flow esqueleto
   - [x] Bugfix backend al integrar: `_Client` unhashable rompía el WS (Rev en
         `REVIEW_TASKS.md`; backend 82 tests verdes)
-- **F3.1 — Paleta + canvas editable + inspector**
-  - [ ] Paleta arrastrable (drivers/lógica/widgets) + conexión de nodos
-  - [ ] Inspector de propiedades (IPs, DB/registro, polling, umbrales de alarma)
+- **F3.1 — Paleta + canvas editable + inspector** ✅ **Completa (frontend 39 tests verdes)**
+  - [x] Paleta arrastrable (drivers/lógica/widgets, HTML5 DnD) + conexión de nodos
+  - [x] Canvas editable (soltar/seleccionar/borrar) sobre `projectStore` (Zustand)
+  - [x] Inspector de propiedades (label, subtipo, params tipados + JSON avanzado)
+  - [x] Modelo uniforme del editor + mapping puro a `DriverNode/LogicNode/WidgetNode`
+        (round-trip probado) + persistencia local del diseño
 - **F3.2 — Widgets HMI + data-binding**
   - [ ] Widgets base (tanque, válvula, gráfico) con **binding por `tag_id`**
 - **F3.3 — Import/export + LogicNode sandbox**

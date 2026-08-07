@@ -1,87 +1,84 @@
 /**
- * Canvas React Flow — esqueleto de F3.0.
+ * Canvas editable (F3.1).
  *
- * Aquí sólo montamos el lienzo (fondo, controles, minimapa) con unos nodos de
- * muestra que representan las tres familias de la paleta (driver/lógica/widget,
- * `models/node.py`). En F3.1 se añaden paleta arrastrable, conexión de nodos e
- * inspector de propiedades; en F3.2, el data-binding por `tag_id` a los widgets.
+ * Fuente de verdad en `projectStore`. Soporta: soltar nodos desde la paleta
+ * (HTML5 DnD → `screenToFlowPosition`), conectar nodos, seleccionar (alimenta el
+ * inspector) y borrar (Supr/Backspace, que limpia también los edges conectados).
  */
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import {
   Background,
   Controls,
   MiniMap,
   ReactFlow,
-  addEdge,
-  useEdgesState,
-  useNodesState,
-  type Connection,
-  type Edge,
-  type Node,
+  ReactFlowProvider,
+  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { createNode, parsePaletteItem, PALETTE_MIME, type AppNode } from "../editor/model";
+import { nodeTypes } from "../editor/nodeTypes";
+import { useProjectStore } from "../store/projectStore";
 
-const initialNodes: Node[] = [
-  {
-    id: "driver-1",
-    position: { x: 40, y: 40 },
-    data: { label: "🔌 Driver Modbus" },
-    style: nodeStyle("#2f81f7"),
-  },
-  {
-    id: "logic-1",
-    position: { x: 300, y: 140 },
-    data: { label: "🧮 Lógica: escala" },
-    style: nodeStyle("#d29922"),
-  },
-  {
-    id: "widget-1",
-    position: { x: 560, y: 40 },
-    data: { label: "🛢️ Widget: tanque" },
-    style: nodeStyle("#2ea043"),
-  },
-];
+function Canvas() {
+  const { screenToFlowPosition } = useReactFlow();
+  const nodes = useProjectStore((s) => s.nodes);
+  const edges = useProjectStore((s) => s.edges);
+  const onNodesChange = useProjectStore((s) => s.onNodesChange);
+  const onEdgesChange = useProjectStore((s) => s.onEdgesChange);
+  const onConnect = useProjectStore((s) => s.onConnect);
+  const addNode = useProjectStore((s) => s.addNode);
+  const select = useProjectStore((s) => s.select);
 
-const initialEdges: Edge[] = [
-  { id: "e1", source: "driver-1", target: "logic-1" },
-  { id: "e2", source: "logic-1", target: "widget-1" },
-];
+  const types = useMemo(() => nodeTypes, []);
 
-function nodeStyle(color: string): React.CSSProperties {
-  return {
-    background: "#171b22",
-    color: "#e6edf3",
-    border: `1px solid ${color}`,
-    borderRadius: 8,
-    padding: "8px 12px",
-    fontSize: 13,
-  };
-}
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
 
-export function FlowCanvas() {
-  const [nodes, , onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const item = parsePaletteItem(e.dataTransfer.getData(PALETTE_MIME));
+      if (!item) return;
+      const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      addNode(createNode(item, position));
+    },
+    [screenToFlowPosition, addNode],
   );
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onConnect={onConnect}
-      colorMode="dark"
-      fitView
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background gap={16} />
-      <MiniMap pannable zoomable />
-      <Controls />
-    </ReactFlow>
+    <div className="canvas-wrap" onDrop={onDrop} onDragOver={onDragOver}>
+      <ReactFlow<AppNode>
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={types}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={(_e, node) => select(node.id)}
+        onPaneClick={() => select(null)}
+        deleteKeyCode={["Backspace", "Delete"]}
+        colorMode="dark"
+        fitView
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background gap={16} />
+        <MiniMap pannable zoomable />
+        <Controls />
+      </ReactFlow>
+      {nodes.length === 0 && (
+        <div className="canvas-empty">Arrastra bloques de la paleta para empezar a diseñar.</div>
+      )}
+    </div>
+  );
+}
+
+export function FlowCanvas() {
+  return (
+    <ReactFlowProvider>
+      <Canvas />
+    </ReactFlowProvider>
   );
 }

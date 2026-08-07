@@ -177,6 +177,29 @@ simulador Modbus):**
 
 **F3.0 lista para merge — backend 82 tests verdes · frontend 24 tests verdes.**
 
+## F3.1 — Frontend: paleta + canvas editable + inspector (Opus) · 2026-08-07
+
+Segundo bloque de la Fase 3. Editor visual sobre el scaffold de F3.0. Sin cambios en
+el backend (el editor es 100% cliente).
+
+- **Modelo uniforme del editor** (`src/editor/model.ts`): un solo `EditorNodeData`
+  (`kind`/`subtype`/`params`) para los tres tipos de nodo → la paleta, el store, los
+  nodos custom y el inspector no duplican la lógica de config/params/props.
+- **Mapping puro** (`src/editor/mapping.ts`): `toProjectNode`/`fromProjectNode`/
+  `buildProject` expanden/colapsan al contrato del backend (`models/node.py`).
+  Round-trip idempotente probado (deja F3.3 import/export casi hecho).
+- **projectStore** (Zustand + persist): nodes/edges/selección/meta, acciones
+  add/update/remove/onChanges/onConnect; diseño persistido en `localStorage`.
+- **Paleta arrastrable** (HTML5 DnD) → **canvas editable** (`screenToFlowPosition`
+  al soltar, conectar, seleccionar, borrar con Supr) → **inspector** (label, subtipo
+  que reinicia params, params tipados número/booleano/texto + editor JSON avanzado).
+- **39 tests Vitest verdes** (24 previos + 15: paleta/createNode, mapping+round-trip,
+  projectStore, inspector render/edición). `tsc` + `vite build` limpios.
+- Verificación visual (Playwright): arrastrar 3 nodos, seleccionar y editar params.
+- Menor: favicon SVG añadido (elimina el 404 de `/favicon.ico`).
+
+**F3.1 lista para merge — frontend 39 tests verdes · backend sin cambios (82).**
+
 ## Cómo correr
 
 ```bash
