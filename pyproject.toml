@@ -3,7 +3,12 @@ name = "iiot-platform-backend"
 version = "0.1.0"
 description = "Backend asíncrono (FastAPI + asyncio) para la plataforma IIoT Open Source"
 readme = "README.md"
-requires-python = ">=3.11"
+# R7 (§0.6, precedente pymodbus): techo en <3.14. Python 3.14 cambia el manejo de
+# anotaciones (PEP 649) y Pydantic 2.13.x (la última) rompe al evaluar type hints
+# (`AssertionError` en `eval_type_backport`) → el backend ni siquiera importa.
+# Verificado OK en 3.11/3.12/3.13. Se subirá el techo cuando Pydantic publique
+# soporte de 3.14. Mejor fallar en el install con un mensaje claro que con un 500.
+requires-python = ">=3.11,<3.14"
 license = { file = "LICENSE" }
 
 dependencies = [

@@ -10,6 +10,8 @@
 cd open-iiot-platform
 pip install -e ".[dev,drivers]"     # core + drivers reales (snap7, asyncua, aiomqtt)
 ```
+> **Python soportado: 3.11 – 3.13.** 3.14 aún no (Pydantic no lo soporta; R7). En
+> Windows: instala Python 3.13 y crea el entorno con `py -3.13 -m venv .venv`.
 - `python-snap7>=2.0` incluye los binarios nativos → **no** hace falta instalar libsnap7 en el SO.
 - Asegura conectividad de red al PLC (misma subred / VLAN OT, firewall abierto al puerto).
 
