@@ -220,6 +220,29 @@ Aceptado sin reabrir (validado como correcto por los revisores): modelo uniforme
 y el bugfix `@dataclass(eq=False)`. **F3.0+F3.1 con Rev 14 — frontend 46 tests verdes ·
 backend 82.**
 
+## F3.2 — Frontend: widgets HMI + data-binding por tag_id (Opus) · 2026-08-07
+
+Tercer bloque de la Fase 3. Los widgets del canvas ahora **leen el valor en vivo**.
+Sin cambios en el backend.
+
+- `editor/widgets.tsx`: helpers puros `tankFillPct` (nivel 0..100 en rango min/max) y
+  `valveState` (open/closed/unknown desde bool/número/string) + `WidgetBody`, que se
+  suscribe al `tagStore` por `props.tag_id` y pinta según el subtipo: **tanque** (fill),
+  **válvula** (indicador de estado), **gráfico** (sparkline de la tendencia).
+- `editor/nodeTypes.tsx`: el nodo widget delega en `WidgetBody` (los otros kinds
+  mantienen el resumen de params).
+- `editor/model.ts`: `defaultParams` por subtipo de widget (tank → min/max; valve →
+  open_value); `PARAM_TYPES` amplía min/max/open_value.
+- `components/Inspector.tsx`: para widgets, `tag_id` es un **select de los tags en vivo**
+  (snapshot REST de `connectionStore`), con fallback a texto para tags no presentes.
+- **53 tests verdes** (46 previos + 7: tankFillPct, valveState, render del widget con
+  valor en vivo del store). `tsc` + `vite build` limpios.
+- Verificación visual e2e (Playwright + backend + simulador Modbus): conectar → soltar
+  un tanque → enlazarlo a `nivel` → el widget refleja el valor en vivo.
+- El origen del dato es indiferente (Modbus/MQTT/S7/OPC UA): sólo importa el `tag_id`.
+
+**F3.2 lista para merge — frontend 53 tests verdes · backend 82.**
+
 ## Cómo correr
 
 ```bash

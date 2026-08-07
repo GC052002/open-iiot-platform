@@ -9,6 +9,7 @@
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { AppNode, NodeKind } from "./model";
+import { WidgetBody } from "./widgets";
 
 const ACCENT: Record<NodeKind, string> = {
   driver: "#2f81f7",
@@ -47,7 +48,12 @@ export function EditorNodeView({ data, selected }: NodeProps<AppNode>) {
       <div className="rf-node-sub" style={{ color: accent }}>
         {data.subtype}
       </div>
-      <div className="rf-node-summary">{summarize(kind, data.params)}</div>
+      {kind === "widget" ? (
+        // F3.2: el widget pinta el valor en vivo del tag enlazado por props.tag_id.
+        <WidgetBody subtype={data.subtype} params={data.params} />
+      ) : (
+        <div className="rf-node-summary">{summarize(kind, data.params)}</div>
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   );

@@ -108,7 +108,14 @@ export function defaultParams(kind: NodeKind, subtype: string): Record<string, u
     }
   }
   // widget — binding por tag_id (contrato F3.2); vacío = sin dato aún.
-  return { tag_id: "" };
+  switch (subtype) {
+    case "tank":
+      return { tag_id: "", min: 0, max: 100 };
+    case "valve":
+      return { tag_id: "", open_value: 1 };
+    default: // chart y otros
+      return { tag_id: "" };
+  }
 }
 
 /** Etiqueta por defecto de un nodo recién creado. */
@@ -134,6 +141,9 @@ const PARAM_TYPES: Record<string, ParamType> = {
   b: "number",
   deadband: "number",
   window: "number",
+  min: "number",
+  max: "number",
+  open_value: "number",
   host: "string",
   endpoint: "string",
   tag_id: "string",

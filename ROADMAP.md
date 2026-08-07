@@ -136,8 +136,11 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
   - [x] Inspector de propiedades (label, subtipo, params tipados + JSON avanzado)
   - [x] Modelo uniforme del editor + mapping puro a `DriverNode/LogicNode/WidgetNode`
         (round-trip probado) + persistencia local del diseño
-- **F3.2 — Widgets HMI + data-binding**
-  - [ ] Widgets base (tanque, válvula, gráfico) con **binding por `tag_id`**
+- **F3.2 — Widgets HMI + data-binding** ✅ **Completa (frontend 53 tests verdes)**
+  - [x] Widgets base (tanque/fill, válvula/estado, gráfico/sparkline) que **leen el
+        valor en vivo** del `tagStore` por `props.tag_id`
+  - [x] Binding en el inspector: `tag_id` como select de los tags en vivo del backend
+  - [x] Helpers puros (`tankFillPct`, `valveState`) testeados; verificación visual e2e
 - **F3.3 — Import/export + LogicNode sandbox**
   - [ ] Import/export del JSON de proyecto (mismo `schema_version` que backend)
   - [ ] `LogicNode` con sandbox (asteval; WASM Wasmer/Extism para Python real)
