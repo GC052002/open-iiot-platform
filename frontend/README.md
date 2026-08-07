@@ -8,22 +8,29 @@ Consume el contrato **estable** del backend (fijado en la Fase 1, no se
 renegocia): WS `/ws` (`backend/app/ws/protocol.py`) y REST (`backend/app/api`).
 El único punto donde vive ese contrato en el frontend es `src/api/types.ts`.
 
-## Estado — F3.0 (scaffold + conexión)
+## Estado
 
+**F3.0 — scaffold + conexión** ✅
 - [x] Scaffold Vite + React + TS + React Flow + Zustand.
-- [x] Cliente **REST** tipado (`src/api/rest.ts`): login, projects, tags, history…
-- [x] Cliente **WebSocket** (`src/api/ws.ts`): reconexión con backoff + jitter y
-      **re-suscripción** idempotente al reconectar.
-- [x] **Store de tags** en tiempo real (`src/store/tagStore.ts`) + reducer puro.
-- [x] Sesión persistida en `localStorage` (`src/store/sessionStore.ts`): token +
-      último `project_id`. Login opcional (auth **opt-in** en el backend).
-- [x] UI mínima: login, barra de conexión, **tabla de tags en vivo** con
-      sparkline, y **canvas** React Flow (esqueleto con las 3 familias de nodos).
-- [x] Tests (Vitest): 24 verdes.
+- [x] Cliente **REST** tipado (`src/api/rest.ts`) + **WebSocket** (`src/api/ws.ts`)
+      con reconexión (backoff+jitter) y **re-suscripción** al reconectar.
+- [x] **Store de tags** en tiempo real (reducer puro) + sesión persistida en
+      `localStorage`. Login opcional (auth **opt-in** en el backend).
+- [x] Tabla de tags en vivo con sparkline.
 
-Próximo (ver `../CONTINUATION.md`): **F3.1** paleta + canvas editable + inspector;
-**F3.2** widgets HMI con data-binding por `tag_id`; **F3.3** import/export del JSON
-de proyecto + `LogicNode` sandbox.
+**F3.1 — paleta + canvas editable + inspector** ✅
+- [x] **Paleta** arrastrable (Drivers/Lógica/Widgets) → canvas por HTML5 DnD.
+- [x] **Canvas editable**: soltar nodos, conectar, seleccionar, borrar (Supr).
+- [x] **Inspector** del nodo seleccionado: etiqueta, subtipo (reinicia params) y
+      cada parámetro con su tipo (número/booleano/texto) + editor JSON avanzado.
+- [x] **Modelo uniforme** (`src/editor/model.ts`) con mapping puro a los
+      `DriverNode/LogicNode/WidgetNode` del backend (`src/editor/mapping.ts`) —
+      round-trip probado (deja F3.3 import/export casi hecho).
+- [x] Diseño persistido en `localStorage` (`src/store/projectStore.ts`).
+- [x] Tests (Vitest): **39 verdes**.
+
+Próximo (ver `../CONTINUATION.md`): **F3.2** widgets HMI con data-binding por
+`tag_id`; **F3.3** import/export del JSON de proyecto + `LogicNode` sandbox.
 
 ## Desarrollo
 
@@ -70,7 +77,20 @@ src/
     tagStore.ts     # Tags en vivo + reducer puro applyTagValues + sparkline buffer
     sessionStore.ts # token/usuario/project_id (persist localStorage)
     connectionStore.ts # status del WS + filas del snapshot + error
+  editor/
+    model.ts        # Modelo uniforme del editor + paleta + createNode + DnD helpers
+    mapping.ts      # Editor ↔ backend (toProjectNode/fromProjectNode/buildProject)
+    nodeTypes.tsx   # Nodo custom del canvas (driver/logic/widget) con handles
   components/
-    LoginBar.tsx  ConnectionBar.tsx  TagTable.tsx  Sparkline.tsx  FlowCanvas.tsx
+    LoginBar.tsx  ConnectionBar.tsx  TagTable.tsx  Sparkline.tsx
+    Palette.tsx   FlowCanvas.tsx     Inspector.tsx
   App.tsx  main.tsx
 ```
+
+## Cómo probar el editor (F3.1)
+
+`npm run dev` → arrastra un bloque de la **paleta** (izquierda) al lienzo; haz clic
+en un nodo para editarlo en el **inspector** (derecha); une nodos arrastrando de un
+puerto a otro; borra con **Supr**. El diseño se guarda solo en `localStorage`. No
+necesita backend (el editor es offline; la barra de conexión es para ver datos en
+vivo, F3.0).
