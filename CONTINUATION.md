@@ -55,8 +55,8 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
   - **F3.3** (proyecto completo): **editor de Tags** (data points), **import/export** del
     JSON (round-trip probado) y botón **Enviar al backend** (`POST /projects` + conectar).
     Lazo diseño→datos en vivo cerrado y verificado e2e.
-- **Tests:** backend **98 verdes** (`pytest -q`) · frontend **66 verdes** (`npm test`).
-- **Revisiones integradas:** Rev 1–15 (Gemini + GLM) + R7 (techo Python <3.14).
+- **Tests:** backend **113 verdes** (`pytest -q`) · frontend **66 verdes** (`npm test`).
+- **Revisiones integradas:** Rev 1–16 (Gemini + GLM) + R7. **Rev 16** endureció el sandbox del LogicNode (allowlist de AST, offload a thread+timeout, detección de ciclos).
 - **Siguiente:** **probar el sistema completo** en Windows (Python 3.13) end-to-end; luego
   **Fase 4** (escalado: Redis, ABAC/Casbin, Vault, TimescaleDB, OTel) o **Fase 5**
   (empaquetado/despliegue). Opcional futuro: `LogicNode` con **WASM** (Python real).
