@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { coerceValue, defaultParams, paramType, SUBTYPES } from "../editor/model";
 import { useConnectionStore } from "../store/connectionStore";
 import { useProjectStore } from "../store/projectStore";
+import { useTagStore } from "../store/tagStore";
 
 export function Inspector() {
   const selectedId = useProjectStore((s) => s.selectedId);
@@ -22,6 +23,9 @@ export function Inspector() {
   // (snapshot REST) ∪ tags definidos en el proyecto (aunque aún no lleguen datos).
   const liveRows = useConnectionStore((s) => s.rows);
   const projectTags = useProjectStore((s) => s.tags);
+  // Tags presentes en el stream en vivo — incluye los DERIVADOS por LogicNode
+  // (p. ej. `scaled`), que no están en /tags ni en los tags del proyecto.
+  const liveTags = useTagStore((s) => s.tags);
 
   if (!node || !selectedId) {
     return (
@@ -78,13 +82,27 @@ export function Inspector() {
           (kind === "widget" && key === "tag_id") || (kind === "logic" && key === "input");
         if (isTagBinding) {
           const current = typeof value === "string" ? value : "";
-          const liveIds = new Set(liveRows.map((r) => r.id));
-          const options = [
-            ...liveRows.map((r) => ({ id: r.id, label: `${r.name} (${r.id}) · en vivo` })),
-            ...projectTags
-              .filter((tg) => !liveIds.has(tg.id))
-              .map((tg) => ({ id: tg.id, label: `${tg.name} (${tg.id})` })),
-          ];
+          const seen = new Set<string>();
+          const options: { id: string; label: string }[] = [];
+          for (const r of liveRows) {
+            if (!seen.has(r.id)) {
+              seen.add(r.id);
+              options.push({ id: r.id, label: `${r.name} (${r.id}) · en vivo` });
+            }
+          }
+          // Derivados por LogicNode (llegan por WS, no están en /tags).
+          for (const id of Object.keys(liveTags)) {
+            if (!seen.has(id)) {
+              seen.add(id);
+              options.push({ id, label: `${id} · derivado` });
+            }
+          }
+          for (const tg of projectTags) {
+            if (!seen.has(tg.id)) {
+              seen.add(tg.id);
+              options.push({ id: tg.id, label: `${tg.name} (${tg.id})` });
+            }
+          }
           const known = options.some((o) => o.id === current);
           return (
             <label className="field" key={key}>
