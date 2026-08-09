@@ -54,8 +54,10 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
   - **F3.3** (proyecto completo): **editor de Tags** (data points), **import/export** del
     JSON (round-trip probado) y botón **Enviar al backend** (`POST /projects` + conectar).
     Lazo diseño→datos en vivo cerrado y verificado e2e.
-- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **60 verdes** (`npm test`).
-- **Revisiones integradas:** Rev 1–14 (Gemini + GLM) + R7 (techo Python <3.14).
+- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **65 verdes** (`npm test`).
+- **Revisiones integradas:** Rev 1–15 (Gemini + GLM) + R7 (techo Python <3.14). **Rev 15**
+  endureció F3.2/F3.3: import anti prototype-pollution + validación de tags, guard anti
+  doble-clic al enviar, y binding de widgets contra tags vivos ∪ del proyecto.
 - **Siguiente:** **`LogicNode` sandbox** (último pendiente de F3): ejecutar cálculos del
   usuario de forma segura — asteval para expresiones; WASM (Wasmer/Extism) para Python
   real (Docker descartado por cold-start). Requiere mini-diseño de seguridad antes.
