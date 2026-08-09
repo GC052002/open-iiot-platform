@@ -141,9 +141,12 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
         valor en vivo** del `tagStore` por `props.tag_id`
   - [x] Binding en el inspector: `tag_id` como select de los tags en vivo del backend
   - [x] Helpers puros (`tankFillPct`, `valveState`) testeados; verificación visual e2e
-- **F3.3 — Import/export + LogicNode sandbox**
-  - [ ] Import/export del JSON de proyecto (mismo `schema_version` que backend)
-  - [ ] `LogicNode` con sandbox (asteval; WASM Wasmer/Extism para Python real)
+- **F3.3 — Editor de Tags + import/export + enviar al backend** ✅ **Completa (frontend 60 tests verdes)**
+  - [x] Editor de **Tags** del proyecto (id/name/driver_id/address/data_type) en `projectStore`
+  - [x] **Import/export** del JSON de proyecto (mismo `schema_version`; round-trip puro probado)
+  - [x] Botón **Enviar al backend** (`POST /projects` + conectar) → lazo diseño→datos en vivo
+  - [ ] `LogicNode` con sandbox (asteval; WASM Wasmer/Extism) → **bloque aparte** (crítico
+        de seguridad; requiere mini-diseño). Diferido tras F3.3.
 - **Salida:** diseñar un proceso arrastrando nodos y ver datos en vivo.
 - **Ejecución:** implementa Opus (el contrato WS↔canvas ya está fijado en F1);
   revisan GLM/Gemini. `[dep: F1]` (puede solaparse con F2)

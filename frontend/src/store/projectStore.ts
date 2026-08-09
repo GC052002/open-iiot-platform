@@ -19,6 +19,7 @@ import {
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import type { AppNode, EditorNodeData } from "../editor/model";
+import type { Tag } from "../api/types";
 
 /**
  * Persiste sólo los campos de dominio del nodo, descartando el estado transitorio
@@ -64,6 +65,7 @@ export interface ProjectMeta {
 interface ProjectStore {
   nodes: AppNode[];
   edges: Edge[];
+  tags: Tag[]; // data points del proyecto (F3.3) — lo que el backend poll-ea
   selectedId: string | null;
   meta: ProjectMeta;
 
@@ -76,9 +78,13 @@ interface ProjectStore {
   setNodeParams: (id: string, params: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
 
+  addTag: (tag: Tag) => void;
+  updateTag: (id: string, patch: Partial<Tag>) => void;
+  removeTag: (id: string) => void;
+
   select: (id: string | null) => void;
   setMeta: (patch: Partial<ProjectMeta>) => void;
-  loadGraph: (nodes: AppNode[], edges: Edge[], meta?: ProjectMeta) => void;
+  loadGraph: (nodes: AppNode[], edges: Edge[], tags?: Tag[], meta?: ProjectMeta) => void;
   clear: () => void;
 }
 
@@ -89,6 +95,7 @@ export const useProjectStore = create<ProjectStore>()(
     (set, get) => ({
       nodes: [],
       edges: [],
+      tags: [],
       selectedId: null,
       meta: DEFAULT_META,
 
@@ -120,16 +127,26 @@ export const useProjectStore = create<ProjectStore>()(
           selectedId: s.selectedId === id ? null : s.selectedId,
         })),
 
+      addTag: (tag) => set((s) => ({ tags: [...s.tags, tag] })),
+      updateTag: (id, patch) =>
+        set((s) => ({ tags: s.tags.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
+      removeTag: (id) => set((s) => ({ tags: s.tags.filter((t) => t.id !== id) })),
+
       select: (id) => set({ selectedId: id }),
       setMeta: (patch) => set((s) => ({ meta: { ...s.meta, ...patch } })),
-      loadGraph: (nodes, edges, meta) =>
-        set((s) => ({ nodes, edges, meta: meta ?? s.meta, selectedId: null })),
-      clear: () => set({ nodes: [], edges: [], selectedId: null }),
+      loadGraph: (nodes, edges, tags, meta) =>
+        set((s) => ({ nodes, edges, tags: tags ?? s.tags, meta: meta ?? s.meta, selectedId: null })),
+      clear: () => set({ nodes: [], edges: [], tags: [], selectedId: null }),
     }),
     {
       name: "iiot.project",
       storage: createJSONStorage(() => debouncedStorage(500)),
-      partialize: (s) => ({ nodes: sanitizeNodes(s.nodes), edges: s.edges, meta: s.meta }),
+      partialize: (s) => ({
+        nodes: sanitizeNodes(s.nodes),
+        edges: s.edges,
+        tags: s.tags,
+        meta: s.meta,
+      }),
     },
   ),
 );

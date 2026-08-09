@@ -258,6 +258,28 @@ Sin release de Pydantic que lo arregle aún. Verificado **OK en 3.11/3.12/3.13**
 Decisión alineada con §0.6 (precedente del pin de pymodbus): no pelear con una librería
 en transición; fijar versión soportada y seguir.
 
+## F3.3 — Frontend: editor de Tags + import/export + enviar al backend (Opus) · 2026-08-09
+
+Cuarto bloque de la Fase 3. Cierra el lazo **diseño → datos en vivo**. Sin cambios en
+el backend.
+
+- `store/projectStore.ts`: `tags: Tag[]` (data points) con add/update/remove, persistidos;
+  `buildProject`/`loadGraph`/`clear` los incluyen.
+- `editor/mapping.ts`: `buildProject(meta, nodes, edges, tags)` ensambla el `ProjectV1`.
+- `editor/projectIO.ts`: `serializeProject`/`deserializeProject` (puros, round-trip
+  probado) + helpers `downloadJSON`/`readFileText`. Import valida `schema_version:"1"`.
+- `components/TagsPanel.tsx`: editor de Tags (id/name/driver/address/data_type); el
+  `driver_id` se elige entre los nodos driver del canvas.
+- `components/ProjectToolbar.tsx`: **Exportar** (descarga JSON), **Importar** (carga JSON),
+  **Enviar al backend** (`POST /projects` + `connect`) → ver los datos en vivo.
+- **60 tests verdes** (53 previos + 7: tags del store, buildProject con tags, round-trip
+  de import/export + errores). `tsc` + `vite build` limpios.
+- Verificación visual e2e (Playwright + backend + simulador): diseñar driver+tag →
+  «Enviar al backend» → conectado.
+- `LogicNode` sandbox: **diferido** a un bloque aparte (crítico de seguridad).
+
+**F3.3 lista para merge — frontend 60 tests verdes · backend 82.**
+
 ## Cómo correr
 
 ```bash

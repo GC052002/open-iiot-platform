@@ -47,6 +47,19 @@ la sesión** (cierre WS por auth), y esquema de tipos de parámetros en el inspe
 > un **Tanque** al lienzo, selecciónalo y elige el tag en **«tag enlazado»** → el widget
 > refleja el valor en tiempo real. El origen (Modbus/MQTT/S7/OPC UA) es indiferente.
 
+**F3.3 — proyecto completo (editor de Tags + import/export + enviar al backend)** ✅
+- [x] **Editor de Tags** del proyecto (`components/TagsPanel.tsx`): define los data
+      points (id/nombre/driver/dirección/tipo) que el backend poll-eará.
+- [x] **Import/Export** del JSON de proyecto (`editor/projectIO.ts`, round-trip probado)
+      — mismo `schema_version` que el backend.
+- [x] **Enviar al backend** (`components/ProjectToolbar.tsx`): `POST /projects` + conectar,
+      cerrando el lazo **diseño → datos en vivo**.
+- [x] Tests (Vitest): **60 verdes**.
+
+> **Lazo completo:** añade un nodo **driver** (ajusta host/puerto en el inspector),
+> define un **tag** en «Tags del proyecto» apuntando a ese driver, y pulsa **Enviar al
+> backend** → el backend arranca el proyecto y empiezas a ver los datos en vivo.
+
 Próximo (ver `../CONTINUATION.md`): **F3.2** widgets HMI con data-binding por
 `tag_id`; **F3.3** import/export del JSON de proyecto + `LogicNode` sandbox.
 
