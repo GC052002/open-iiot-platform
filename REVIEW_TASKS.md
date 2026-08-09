@@ -322,6 +322,28 @@ posee el flujo de datos), no en el navegador.
 (Wasmer/Extism) para Python real: diferido** (más pesado; asteval cubre expresiones
 aritméticas, el caso mayoritario). **Fase 3 COMPLETA.**
 
+## Rev 16 — Revisión de seguridad externa (Gemini + GLM) de F3.4 · 2026-08-09
+
+Revisión centrada en el sandbox. **Comprobación empírica:** en nuestra asteval **1.0.9**
+los exploits señalados (RCE por `().__class__…__subclasses__()`, `9**9**9`, `while True`)
+**ya estaban bloqueados** por la propia asteval 1.x. Pero el principio del revisor es
+correcto (depender de la denylist de asteval es frágil; el event loop es real), así que
+se endurece con defensa en profundidad:
+
+| # | Severidad | Archivo | Issue | Estado |
+|---|---|---|---|---|
+| 2 | **BLOCKER** | logic/strategies.py | RCE por introspección de atributos si asteval no lo bloqueara. | ✅ **Allowlist de AST** (`validate_expr`): solo aritmética/comparación sobre `x`+params y `abs/min/max/round/int/float`. Se **rechazan** `ast.Attribute`, subscript, listas/tuplas/dicts/sets, comprehensions, lambda, constantes string y exponentes literales enormes. No depende de la denylist de asteval. |
+| 1 | **BLOCKER** | logic/engine.py | Bloqueo del event loop: `expr` síncrona congelaba polling/WS. | ✅ La `expr` corre en `asyncio.to_thread` con `wait_for(EXPR_TIMEOUT_S=0.5)`; las built-in (rápidas) siguen inline. |
+| 3 | **BLOCKER** | logic/engine.py | Bucle de realimentación `A→B→A`. | ✅ **Detección de ciclos** al registrar (peeling del grafo `output→input`): los runners en ciclo se descartan; las cadenas acíclicas se conservan. + guard `output==input`. |
+| 4 | MEDIA | logic/strategies.py | OOM (`[0]*10**8`, `'a'*10**8`). | ✅ La allowlist rechaza literales de lista y constantes string → esos vectores no parsean. (Memoria total 100% garantizada = WASM, diferido.) |
+| 5 | MEDIA | logic/engine.py | Aislamiento entre proyectos. | ✅ Cada cómputo va en su try/except (incl. `TimeoutError`) → un runner roto/lento no afecta a otros ni al motor. |
+| 6 | BAJA | logic/engine.py | Timeout por expresión. | ✅ `wait_for` por cómputo (libera el loop; asteval acota además el tiempo interno). |
+
+Nota: WASM (Wasmer/Extism) sigue siendo la solución definitiva para aislamiento de
+memoria/CPU ante código realmente no-confiable — **diferido a F4**; la allowlist + thread
++ timeout es defensa suficiente para el modelo actual (usuarios autenticados del propio
+sistema). **F3.4 con Rev 16 — backend 98→113 tests verdes.**
+
 ## Cómo correr
 
 ```bash

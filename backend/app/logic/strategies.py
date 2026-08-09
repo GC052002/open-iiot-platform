@@ -15,6 +15,7 @@ Contrato de `compute(x) -> float | None`:
 
 from __future__ import annotations
 
+import ast
 import logging
 from collections import deque
 from typing import Any, Protocol
@@ -23,6 +24,47 @@ log = logging.getLogger("iiot.logic")
 
 #: Límite de longitud de una expresión de usuario (anti-DoS / abuso).
 MAX_EXPR_LEN = 500
+
+# --- Rev 16: allowlist de AST (defensa en profundidad sobre asteval) ---------
+# En vez de confiar en la denylist interna de asteval (frágil entre versiones),
+# validamos el AST de la expresión y **solo** permitimos aritmética/comparación
+# sobre `x` + parámetros numéricos + un puñado de funciones matemáticas seguras.
+# Esto elimina de raíz: acceso a atributos/dunder (RCE por introspección),
+# subscripts, literales de lista/tupla/dict/set y comprehensions (memoria), y
+# cualquier sentencia (mode="eval" ya rechaza `while`/`import`).
+_ALLOWED_NODES: frozenset[type] = frozenset({
+    ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare, ast.IfExp,
+    ast.Name, ast.Load, ast.Constant, ast.Call,
+    ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
+    ast.USub, ast.UAdd, ast.Not, ast.And, ast.Or,
+    ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
+})
+_ALLOWED_FUNCS: frozenset[str] = frozenset({"abs", "min", "max", "round", "int", "float"})
+_MAX_POW_EXPONENT = 1000  # cota para exponentes literales (anti explosión de enteros)
+
+
+def validate_expr(expr: str) -> None:
+    """Valida el AST de una expresión de usuario. Lanza `ValueError`/`SyntaxError`
+    si contiene algo fuera del allowlist matemático."""
+    tree = ast.parse(expr, mode="eval")  # mode="eval" ya rechaza sentencias
+    for node in ast.walk(tree):
+        if type(node) not in _ALLOWED_NODES:
+            raise ValueError(f"nodo no permitido: {type(node).__name__}")
+        if isinstance(node, ast.Constant) and not isinstance(node.value, (int, float)):
+            # bool es subclase de int (permitido); str/bytes/complex NO.
+            raise ValueError("solo se permiten constantes numéricas")
+        if isinstance(node, ast.Call) and (
+            not isinstance(node.func, ast.Name) or node.func.id not in _ALLOWED_FUNCS
+        ):
+            raise ValueError("llamada a función no permitida")
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Pow):
+            rhs = node.right
+            if (
+                isinstance(rhs, ast.Constant)
+                and isinstance(rhs.value, (int, float))
+                and abs(rhs.value) > _MAX_POW_EXPONENT
+            ):
+                raise ValueError("exponente demasiado grande")
 
 
 def _as_number(x: Any) -> float | None:
@@ -93,6 +135,20 @@ class _SafeExpr:
             and not isinstance(v, bool)
         }
         self._interp: Any | None = None
+        # Rev 16: valida el AST una sola vez (fail-fast). Si es inválida, el runner
+        # queda inerte (devuelve None siempre) en vez de intentar evaluar cada ciclo.
+        self.error: str | None = None
+        if len(self.expr) > MAX_EXPR_LEN:
+            self.error = f"expr demasiado larga (>{MAX_EXPR_LEN})"
+        else:
+            try:
+                validate_expr(self.expr)
+            except SyntaxError:
+                self.error = "sintaxis inválida"
+            except ValueError as exc:
+                self.error = str(exc)
+        if self.error:
+            log.warning("expr de LogicNode rechazada (%s): %r", self.error, self.expr[:80])
 
     def _interpreter(self) -> Any:
         from asteval import Interpreter  # import perezoso (dep opcional)
@@ -104,8 +160,7 @@ class _SafeExpr:
             return Interpreter(use_numpy=False)
 
     def __call__(self, x: Any) -> float | None:
-        if len(self.expr) > MAX_EXPR_LEN:
-            log.warning("expr de LogicNode demasiado larga (%d chars), ignorada", len(self.expr))
+        if self.error:  # AST inválido: runner inerte (Rev 16)
             return None
         try:
             interp = self._interp or self._interpreter()

@@ -123,3 +123,75 @@ async def test_logic_engine_unregister():
     assert eng.runner_count("p1") == 1
     eng.unregister_project("p1")
     assert eng.runner_count("p1") == 0
+
+
+# -- Rev 16: allowlist de AST + ciclos + offload async -----------------------
+from app.logic.strategies import validate_expr  # noqa: E402
+
+
+def test_validate_expr_accepts_math():
+    for ok in ["x*2 + 1", "abs(x - 5)", "min(x, 10)", "x if x > 0 else 0", "(x + a) / 2"]:
+        validate_expr(ok)  # no lanza
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "x.__class__",                       # atributo (RCE)
+        "().__class__.__bases__",            # atributo
+        "x[0]",                              # subscript
+        "[i for i in range(9)]",             # comprehension (memoria)
+        "[0] * 999",                         # literal lista
+        "'a' * 999",                         # constante string
+        "open('x')",                         # llamada no permitida
+        "2 ** 999999",                       # exponente enorme
+        "lambda: 1",                         # lambda
+    ],
+)
+def test_validate_expr_rejects_unsafe(bad):
+    with pytest.raises((ValueError, SyntaxError)):
+        validate_expr(bad)
+
+
+def test_expr_with_unsafe_ast_is_inert():
+    # Construido pero inerte: siempre None, sin evaluar.
+    c = build_compute("expr", {"expr": "x.__class__"})
+    assert c(1) is None
+    c2 = build_compute("expr", {"expr": "[0]*10**8"})
+    assert c2(1) is None
+
+
+def test_expr_allowed_still_computes():
+    c = build_compute("expr", {"expr": "abs(x - 3) + a", "a": 1})
+    assert c(1) == 3.0  # abs(1-3)+1 = 3
+
+
+def test_cycle_is_broken():
+    eng = LogicEngine(publish=lambda *_: None)  # type: ignore[arg-type]
+    # A->B y B->A: ciclo → ambos descartados.
+    eng.register_project("p", [
+        _logic("l1", "scale", input="A", output="B"),
+        _logic("l2", "scale", input="B", output="A"),
+    ])
+    assert eng.runner_count("p") == 0
+
+
+def test_chain_is_kept():
+    eng = LogicEngine(publish=lambda *_: None)  # type: ignore[arg-type]
+    eng.register_project("p", [
+        _logic("l1", "scale", input="A", output="B"),
+        _logic("l2", "scale", input="B", output="C"),
+    ])
+    assert eng.runner_count("p") == 2
+
+
+async def test_expr_runs_in_thread_and_publishes():
+    published: list[TagValue] = []
+
+    async def pub(_pid, samples):
+        published.extend(samples)
+
+    eng = LogicEngine(publish=pub)
+    eng.register_project("p", [_logic("l1", "expr", input="raw", output="calc", expr="x*2 + 1")])
+    await eng.on_tag_update("p", [TagValue(tag_id="raw", value=10.0)])
+    assert published and published[0].tag_id == "calc" and published[0].value == 21.0
