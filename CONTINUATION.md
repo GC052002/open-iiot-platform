@@ -41,7 +41,8 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
 
 - **Fase 2 COMPLETA.** F0 ✅ · F1 ✅ · F2.0–F2.3 ✅ · monitor web ✅ · **F2.4** (alarmas +
   seguridad + observabilidad) ✅ — todo en `main`.
-- **Fase 3 EN CURSO. F3.0 ✅ · F3.1 ✅ · F3.2 ✅ · F3.3 ✅** (falta solo `LogicNode` sandbox)
+- **Fase 3 COMPLETA. F3.0–F3.4 ✅** (scaffold+conexión, editor, widgets en vivo, proyecto
+  completo, y `LogicNode` sandbox). Frontend visual funcional end-to-end.
   - **F3.0** (scaffold + conexión WS/REST): `frontend/` (React + TS + Vite +
     @xyflow/react + Zustand), tabla de tags en vivo, cliente WS con reconexión/
     re-suscripción, login opcional, persistencia local. **Bugfix backend:** `_Client`
@@ -54,13 +55,11 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
   - **F3.3** (proyecto completo): **editor de Tags** (data points), **import/export** del
     JSON (round-trip probado) y botón **Enviar al backend** (`POST /projects` + conectar).
     Lazo diseño→datos en vivo cerrado y verificado e2e.
-- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **65 verdes** (`npm test`).
-- **Revisiones integradas:** Rev 1–15 (Gemini + GLM) + R7 (techo Python <3.14). **Rev 15**
-  endureció F3.2/F3.3: import anti prototype-pollution + validación de tags, guard anti
-  doble-clic al enviar, y binding de widgets contra tags vivos ∪ del proyecto.
-- **Siguiente:** **`LogicNode` sandbox** (último pendiente de F3): ejecutar cálculos del
-  usuario de forma segura — asteval para expresiones; WASM (Wasmer/Extism) para Python
-  real (Docker descartado por cold-start). Requiere mini-diseño de seguridad antes.
+- **Tests:** backend **98 verdes** (`pytest -q`) · frontend **66 verdes** (`npm test`).
+- **Revisiones integradas:** Rev 1–15 (Gemini + GLM) + R7 (techo Python <3.14).
+- **Siguiente:** **probar el sistema completo** en Windows (Python 3.13) end-to-end; luego
+  **Fase 4** (escalado: Redis, ABAC/Casbin, Vault, TimescaleDB, OTel) o **Fase 5**
+  (empaquetado/despliegue). Opcional futuro: `LogicNode` con **WASM** (Python real).
 
 ## Cómo acceder a GitHub (para el agente del chat nuevo)
 
@@ -118,6 +117,8 @@ la UI muestra los tags en vivo. Ver `frontend/README.md`.
   retry) + tabla `audit`.
 - `alarms/` — `AlarmEngine` (delta, histéresis) + `Notifier` (Log/Telegram/SMTP) +
   `QueuedNotifier` (cola, rate-limit, reintentos).
+- `logic/` (F3.4) — `LogicEngine` (suscriptor delta; publica tags derivados `input`→
+  `output`) + `strategies` (scale/avg/deadband puras + `expr` en sandbox **asteval**).
 - `security/` — `crypto` (Fernet, fail-closed), `rbac` (roles + PBKDF2), `auth` (opt-in),
   `context`.
 - `observability/` — `metrics` (registro thread-safe → Prometheus).
@@ -130,16 +131,15 @@ la UI muestra los tags en vivo. Ver `frontend/README.md`.
   `/metrics`, dashboard `/`.
 - `tools/plc_check.py` — preflight de conectividad a PLC real.
 
-## Próximo paso: `LogicNode` sandbox (último pendiente de la Fase 3)
+## Próximo paso: probar el sistema completo, luego Fase 4/5
 
-- **F3.0–F3.3** ✅ — scaffold+conexión, editor (paleta/canvas/inspector), widgets en
-  vivo, y proyecto completo (editor de Tags + import/export + enviar al backend).
-- **Pendiente** ← **siguiente**: **`LogicNode` sandbox**. Ejecutar la lógica que el
-  usuario define en un `LogicNode` (escalado, filtros, cálculos) de forma **segura**.
-  PROJECT_CONTEXT lo marca como "requiere diseño de seguridad": hacer primero un
-  mini-diseño (dónde se ejecuta — ¿backend engine?—, aislamiento, límites de CPU/mem).
-  Plan: **asteval** para expresiones aritméticas; **WASM (Wasmer/Extism)** para Python
-  real (Docker descartado por cold-start). Es un bloque con peso de backend, no solo UI.
+- **Fase 3 COMPLETA** (F3.0–F3.4). El frontend visual funciona end-to-end: diseñar →
+  enviar al backend → ver datos en vivo → lógica derivada → import/export.
+- **`LogicNode`** ✅ en `backend/app/logic/` (`LogicEngine` + estrategias + sandbox
+  asteval). El motor publica tags derivados (`input`→`output`). WASM/Python real diferido.
+- **Siguiente** ← **probar el sistema completo** en Windows con **Python 3.13** (recorrido
+  diseñar→enviar→vivo→logic→export). Después: **Fase 4** (cloud-native: Redis, ABAC/Casbin,
+  Vault, TimescaleDB, OTel) o **Fase 5** (empaquetado/despliegue por modo de red).
 - **F3.2** — widgets HMI (tanque, válvula, gráfico) con **data binding por `tag_id`**
   (usar el contrato WS ya fijado; el origen del dato es indiferente).
 - **F3.3** — import/export del JSON de proyecto (mismo `schema_version` que el backend)
