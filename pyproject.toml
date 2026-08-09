@@ -20,6 +20,9 @@ dependencies = [
     # clásica de servidor que usa el simulador. Se revisará al portar a 4.x.
     "pymodbus>=3.6,<3.9",
     "cryptography>=42",          # Fernet (cifrado de credenciales, §3.5)
+    # Sandbox de expresiones para LogicNode (estrategia `expr`, F3). Pure-python,
+    # sin binarios → air-gapped friendly. Restringe import/open/dunder por diseño.
+    "asteval>=0.9.31,<2",
 ]
 
 [project.optional-dependencies]

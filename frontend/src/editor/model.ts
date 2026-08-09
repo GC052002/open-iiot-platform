@@ -53,6 +53,7 @@ export const SUBTYPES: Record<NodeKind, { value: string; label: string }[]> = {
     { value: "scale", label: "Escala (a·x+b)" },
     { value: "deadband", label: "Deadband" },
     { value: "avg", label: "Media móvil" },
+    { value: "expr", label: "Expresión" },
   ],
   widget: [
     { value: "tank", label: "Tanque" },
@@ -96,15 +97,19 @@ export function defaultParams(kind: NodeKind, subtype: string): Record<string, u
     }
   }
   if (kind === "logic") {
+    // input = tag de origen; output = tag derivado que publica el backend (F3).
+    const io = { input: "", output: "" };
     switch (subtype) {
       case "scale":
-        return { a: 1.0, b: 0.0 };
+        return { ...io, a: 1.0, b: 0.0 };
       case "deadband":
-        return { deadband: 0.5 };
+        return { ...io, deadband: 0.5 };
       case "avg":
-        return { window: 10 };
+        return { ...io, window: 10 };
+      case "expr":
+        return { ...io, expr: "x" };
       default:
-        return {};
+        return io;
     }
   }
   // widget — binding por tag_id (contrato F3.2); vacío = sin dato aún.

@@ -72,23 +72,26 @@ export function Inspector() {
       {Object.keys(params).length === 0 && <div className="inspector-empty">Sin parámetros.</div>}
       {Object.entries(params).map(([key, value]) => {
         const t = paramType(key, value);
-        // F3.2/Rev 15: binding de widget → select de tags (vivos ∪ del proyecto).
-        if (kind === "widget" && key === "tag_id") {
+        // Binding a un tag de origen (select de tags vivos ∪ del proyecto):
+        // widget.tag_id (F3.2/Rev 15) y logic.input (LogicNode).
+        const isTagBinding =
+          (kind === "widget" && key === "tag_id") || (kind === "logic" && key === "input");
+        if (isTagBinding) {
           const current = typeof value === "string" ? value : "";
           const liveIds = new Set(liveRows.map((r) => r.id));
           const options = [
             ...liveRows.map((r) => ({ id: r.id, label: `${r.name} (${r.id}) · en vivo` })),
             ...projectTags
-              .filter((t) => !liveIds.has(t.id))
-              .map((t) => ({ id: t.id, label: `${t.name} (${t.id})` })),
+              .filter((tg) => !liveIds.has(tg.id))
+              .map((tg) => ({ id: tg.id, label: `${tg.name} (${tg.id})` })),
           ];
           const known = options.some((o) => o.id === current);
           return (
             <label className="field" key={key}>
-              <span>tag enlazado</span>
+              <span>{key === "input" ? "tag de entrada" : "tag enlazado"}</span>
               <select
                 value={current}
-                onChange={(e) => setNodeParams(selectedId, { ...params, tag_id: e.target.value })}
+                onChange={(e) => setNodeParams(selectedId, { ...params, [key]: e.target.value })}
               >
                 <option value="">— sin binding —</option>
                 {current && !known && <option value={current}>{current} (desconocido)</option>}

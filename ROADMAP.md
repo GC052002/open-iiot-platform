@@ -145,8 +145,13 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
   - [x] Editor de **Tags** del proyecto (id/name/driver_id/address/data_type) en `projectStore`
   - [x] **Import/export** del JSON de proyecto (mismo `schema_version`; round-trip puro probado)
   - [x] Botón **Enviar al backend** (`POST /projects` + conectar) → lazo diseño→datos en vivo
-  - [ ] `LogicNode` con sandbox (asteval; WASM Wasmer/Extism) → **bloque aparte** (crítico
-        de seguridad; requiere mini-diseño). Diferido tras F3.3.
+- **F3.4 — `LogicNode` sandbox** ✅ **Completa (backend 98 tests verdes · frontend 66)**
+  - [x] `logic/` en el backend: `LogicEngine` (suscriptor delta del TagCache) publica
+        **tags derivados** por `input`→`output`; estrategias `scale`/`avg`/`deadband`
+  - [x] Estrategia `expr`: **sandbox asteval** (sin import/open/dunder; límite de
+        longitud; fail-safe → un LogicNode roto no tumba el motor)
+  - [x] Frontend: `expr` en la paleta, defaults input/output, `input` como select de tags
+  - [x] Verificado e2e: `scale(raw)` → `scaled = raw*10` por WS. **WASM Python real: diferido**.
 - **Salida:** diseñar un proceso arrastrando nodos y ver datos en vivo.
 - **Ejecución:** implementa Opus (el contrato WS↔canvas ya está fijado en F1);
   revisan GLM/Gemini. `[dep: F1]` (puede solaparse con F2)

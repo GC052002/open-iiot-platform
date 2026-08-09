@@ -298,6 +298,30 @@ de tags sin romper Rev 14, desacople del editor de Tags). Hallazgos:
 Aceptado sin reabrir: helpers puros, integración de tags respetando Rev 14, desacople de
 `TagsPanel`. **F3.2+F3.3 con Rev 15 — frontend 65 tests verdes · backend 82.**
 
+## F3.4 — LogicNode sandbox (Opus) · 2026-08-09
+
+Último bloque de la Fase 3. Ejecuta la lógica del usuario **en el backend** (el motor
+posee el flujo de datos), no en el navegador.
+
+- `logic/strategies.py`: estrategias built-in **puras** (`scale` a·x+b, `avg` media móvil,
+  `deadband` filtro) + `expr` en **sandbox asteval** (bloquea import/open/eval/dunder;
+  `MAX_EXPR_LEN`; solo `x` + parámetros numéricos entran al symtable; fail-safe → None).
+- `logic/engine.py`: `LogicEngine` suscriptor **delta** del TagCache (patrón `AlarmEngine`);
+  cada `LogicNode` con `input`/`output` publica un **tag derivado** de vuelta al cache
+  (fluye a WS/widgets/historiador). `output==input` se descarta (anti auto-bucle).
+- `state.py`: `LogicEngine` global suscrito; register/unregister por proyecto.
+- `pyproject.toml`: `asteval>=0.9.31,<2` (pure-python, air-gapped friendly).
+- Frontend: `expr` en la paleta de lógica; defaults `input`/`output` por estrategia;
+  `input` como select de tags (vivos ∪ del proyecto) en el inspector.
+- **Tests: backend 82→98 (+16)** — estrategias, **5 expresiones maliciosas bloqueadas**,
+  límite de longitud, params no numéricos filtrados, cómputo/publicación del engine y
+  end-to-end vía TagCache. Frontend 66. Verificado e2e (scale(raw)=raw·10 por WS).
+
+**Diseño de seguridad (mini):** ejecución en backend; asteval como intérprete restringido
+(no `import`/`open`/`exec`/atributos/dunder); límites de longitud; fail-safe. **WASM
+(Wasmer/Extism) para Python real: diferido** (más pesado; asteval cubre expresiones
+aritméticas, el caso mayoritario). **Fase 3 COMPLETA.**
+
 ## Cómo correr
 
 ```bash

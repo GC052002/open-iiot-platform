@@ -80,3 +80,11 @@ describe("paramType / coerceValue (Rev 14)", () => {
     expect(coerceValue("127.0.0.1", "string")).toBe("127.0.0.1");
   });
 });
+
+describe("defaultParams de LogicNode (F3)", () => {
+  it("incluye input/output y los params por estrategia", () => {
+    expect(defaultParams("logic", "scale")).toEqual({ input: "", output: "", a: 1.0, b: 0.0 });
+    expect(defaultParams("logic", "expr")).toEqual({ input: "", output: "", expr: "x" });
+    expect(defaultParams("logic", "avg")).toMatchObject({ input: "", output: "", window: 10 });
+  });
+});
