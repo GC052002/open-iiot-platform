@@ -311,3 +311,29 @@ button.danger { color: #f85149; }
 
 /* Gráfico */
 .wg-chart { display: flex; flex-direction: column; align-items: center; margin-top: 6px; }
+
+/* --- Secciones colapsables del panel izquierdo (F3.3) --- */
+.col-left { overflow-y: auto; }
+.side-section { border-top: 1px solid var(--line); }
+.side-section > summary {
+  cursor: pointer; list-style: none; padding: 8px 12px;
+}
+.side-section > summary::-webkit-details-marker { display: none; }
+.side-section > summary::before { content: "▸ "; color: var(--muted); }
+.side-section[open] > summary::before { content: "▾ "; }
+
+/* --- Editor de Tags (F3.3) --- */
+.tags-panel { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.tags-panel input, .tags-panel select { width: 100%; }
+.tagdef {
+  border: 1px solid var(--line); border-radius: 7px; padding: 8px; background: #0d1117;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.tagdef-row { display: flex; align-items: center; gap: 6px; }
+.tagdef-id { font-weight: 600; font-size: 12px; flex: 1; font-variant-numeric: tabular-nums; }
+.tagdef-x { padding: 2px 7px; font-size: 12px; }
+.tagdef-row2 { display: flex; gap: 6px; }
+.tagdef-row2 input { flex: 1; }
+.tagdef-row2 select { width: auto; }
+.tagdef-driver { color: var(--muted); font-size: 11px; }
+.tag-add { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line); }

@@ -2,36 +2,20 @@
  * App raíz del editor HMI.
  *
  * F3.0: conexión al backend por WS/REST (barra de conexión + tabla en vivo).
- * F3.1: editor de canvas — paleta arrastrable (izquierda), lienzo editable
- * (centro) e inspector de propiedades del nodo seleccionado (derecha).
+ * F3.1: editor de canvas — paleta (izq), lienzo editable (centro), inspector (der).
+ * F3.2: widgets con data-binding en vivo por tag_id.
+ * F3.3: editor de Tags del proyecto + import/export + enviar el diseño al backend.
  */
 
 import { ConnectionBar } from "./components/ConnectionBar";
 import { LoginBar } from "./components/LoginBar";
 import { TagTable } from "./components/TagTable";
+import { TagsPanel } from "./components/TagsPanel";
 import { FlowCanvas } from "./components/FlowCanvas";
 import { Palette } from "./components/Palette";
 import { Inspector } from "./components/Inspector";
-import { useProjectStore } from "./store/projectStore";
+import { ProjectToolbar } from "./components/ProjectToolbar";
 import "./App.css";
-
-function EditorToolbar() {
-  const name = useProjectStore((s) => s.meta.name);
-  const setMeta = useProjectStore((s) => s.setMeta);
-  const nodeCount = useProjectStore((s) => s.nodes.length);
-  const edgeCount = useProjectStore((s) => s.edges.length);
-  return (
-    <div className="editor-toolbar">
-      <label>
-        Diseño
-        <input value={name} size={18} onChange={(e) => setMeta({ name: e.target.value })} />
-      </label>
-      <span className="conn-note">
-        {nodeCount} nodos · {edgeCount} conexiones
-      </span>
-    </div>
-  );
-}
 
 export default function App() {
   return (
@@ -45,13 +29,17 @@ export default function App() {
       <div className="app-body">
         <aside className="col-left">
           <Palette />
-          <div className="side-tags">
-            <div className="side-title">Tags en vivo</div>
+          <details className="side-section" open>
+            <summary className="side-title">Tags del proyecto</summary>
+            <TagsPanel />
+          </details>
+          <details className="side-section">
+            <summary className="side-title">Tags en vivo</summary>
             <TagTable />
-          </div>
+          </details>
         </aside>
         <main className="col-center">
-          <EditorToolbar />
+          <ProjectToolbar />
           <FlowCanvas />
         </main>
         <aside className="col-right">

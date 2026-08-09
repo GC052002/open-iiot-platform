@@ -93,3 +93,27 @@ describe("debouncedStorage (Rev 14)", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("tags del proyecto (F3.3)", () => {
+  const mkTag = (id: string) => ({
+    id, name: id, driver_id: "plc1", address: "0",
+    data_type: "int" as const, deadband: 0, deadband_mode: "abs" as const,
+  });
+
+  it("addTag / updateTag / removeTag", () => {
+    const st = useProjectStore.getState();
+    st.addTag(mkTag("nivel"));
+    st.addTag(mkTag("presion"));
+    expect(useProjectStore.getState().tags.map((t) => t.id)).toEqual(["nivel", "presion"]);
+    useProjectStore.getState().updateTag("nivel", { address: "5" });
+    expect(useProjectStore.getState().tags[0].address).toBe("5");
+    useProjectStore.getState().removeTag("presion");
+    expect(useProjectStore.getState().tags.map((t) => t.id)).toEqual(["nivel"]);
+  });
+
+  it("clear vacía también los tags", () => {
+    useProjectStore.getState().addTag(mkTag("x"));
+    useProjectStore.getState().clear();
+    expect(useProjectStore.getState().tags).toEqual([]);
+  });
+});

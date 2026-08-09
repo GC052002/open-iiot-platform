@@ -41,7 +41,7 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
 
 - **Fase 2 COMPLETA.** F0 ✅ · F1 ✅ · F2.0–F2.3 ✅ · monitor web ✅ · **F2.4** (alarmas +
   seguridad + observabilidad) ✅ — todo en `main`.
-- **Fase 3 EN CURSO. F3.0 ✅ · F3.1 ✅ · F3.2 ✅**
+- **Fase 3 EN CURSO. F3.0 ✅ · F3.1 ✅ · F3.2 ✅ · F3.3 ✅** (falta solo `LogicNode` sandbox)
   - **F3.0** (scaffold + conexión WS/REST): `frontend/` (React + TS + Vite +
     @xyflow/react + Zustand), tabla de tags en vivo, cliente WS con reconexión/
     re-suscripción, login opcional, persistencia local. **Bugfix backend:** `_Client`
@@ -50,13 +50,15 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
     propiedades; modelo uniforme del editor con mapping puro (round-trip) a los
     `DriverNode/LogicNode/WidgetNode` del backend; diseño persistido en `localStorage`.
   - **F3.2** (widgets en vivo): widgets HMI (tanque/válvula/gráfico) que **leen el valor
-    en vivo** del `tagStore` por `props.tag_id`; binding en el inspector como select de
-    los tags en vivo. Verificado e2e (tanque enlazado a `nivel` reflejando el simulador).
-- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **53 verdes** (`npm test`).
-- **Revisiones integradas:** Rev 1–14 (Gemini + GLM). **Rev 14** endureció F3.0/F3.1.
-- **Siguiente:** **F3.3** — import/export del JSON de proyecto (el mapping ya está;
-  falta un **editor de Tags** para definir data points id/driver/address) + `LogicNode`
-  con sandbox (asteval; WASM Wasmer/Extism para Python real).
+    en vivo** del `tagStore` por `props.tag_id`; binding en el inspector como select.
+  - **F3.3** (proyecto completo): **editor de Tags** (data points), **import/export** del
+    JSON (round-trip probado) y botón **Enviar al backend** (`POST /projects` + conectar).
+    Lazo diseño→datos en vivo cerrado y verificado e2e.
+- **Tests:** backend **82 verdes** (`pytest -q`) · frontend **60 verdes** (`npm test`).
+- **Revisiones integradas:** Rev 1–14 (Gemini + GLM) + R7 (techo Python <3.14).
+- **Siguiente:** **`LogicNode` sandbox** (último pendiente de F3): ejecutar cálculos del
+  usuario de forma segura — asteval para expresiones; WASM (Wasmer/Extism) para Python
+  real (Docker descartado por cold-start). Requiere mini-diseño de seguridad antes.
 
 ## Cómo acceder a GitHub (para el agente del chat nuevo)
 
@@ -126,23 +128,16 @@ la UI muestra los tags en vivo. Ver `frontend/README.md`.
   `/metrics`, dashboard `/`.
 - `tools/plc_check.py` — preflight de conectividad a PLC real.
 
-## Próximo paso: F3.3 — Import/export del proyecto + editor de Tags + LogicNode sandbox
+## Próximo paso: `LogicNode` sandbox (último pendiente de la Fase 3)
 
-Bloque grande; partir en sub-fases (como F2):
-- **F3.0** ✅ — scaffold + store de tags + cliente WS/REST + login + persistencia local.
-- **F3.1** ✅ — paleta arrastrable + canvas editable + inspector. El editor produce el
-  JSON del backend vía `src/editor/mapping.ts` (`buildProject`).
-- **F3.2** ✅ — widgets HMI que leen el valor en vivo por `tag_id`; binding en el
-  inspector como select de tags en vivo. Base: `src/editor/widgets.tsx`.
-- **F3.3** ← **siguiente**:
-  - **Editor de Tags** (data points): definir id/name/driver_id/address/data_type en el
-    proyecto (hoy sólo se pueden enlazar tags que ya llegan en vivo). `buildProject` ya
-    acepta la lista; falta la UI + persistirlos en `projectStore`.
-  - **Import/export** del JSON de proyecto (mismo `schema_version`; el mapping
-    `fromProjectNode`/`buildProject` ya existe y tiene round-trip probado). Botón para
-    **enviar el diseño al backend** (`POST /projects`) y cerrar el lazo diseño→vivo.
-  - **`LogicNode` sandbox**: asteval para cálculos; WASM (Wasmer/Extism) para Python
-    real (Docker descartado por cold-start).
+- **F3.0–F3.3** ✅ — scaffold+conexión, editor (paleta/canvas/inspector), widgets en
+  vivo, y proyecto completo (editor de Tags + import/export + enviar al backend).
+- **Pendiente** ← **siguiente**: **`LogicNode` sandbox**. Ejecutar la lógica que el
+  usuario define en un `LogicNode` (escalado, filtros, cálculos) de forma **segura**.
+  PROJECT_CONTEXT lo marca como "requiere diseño de seguridad": hacer primero un
+  mini-diseño (dónde se ejecuta — ¿backend engine?—, aislamiento, límites de CPU/mem).
+  Plan: **asteval** para expresiones aritméticas; **WASM (Wasmer/Extism)** para Python
+  real (Docker descartado por cold-start). Es un bloque con peso de backend, no solo UI.
 - **F3.2** — widgets HMI (tanque, válvula, gráfico) con **data binding por `tag_id`**
   (usar el contrato WS ya fijado; el origen del dato es indiferente).
 - **F3.3** — import/export del JSON de proyecto (mismo `schema_version` que el backend)

@@ -14,6 +14,7 @@ import type {
   ProjectEdge,
   ProjectNode,
   ProjectV1,
+  Tag,
   WidgetNode,
 } from "../api/types";
 import type { AppNode, EditorNodeData, NodeKind } from "./model";
@@ -64,6 +65,7 @@ export function buildProject(
   meta: { project_id: string; name: string },
   nodes: AppNode[],
   edges: Edge[],
+  tags: Tag[] = [],
 ): ProjectV1 {
   return {
     schema_version: "1",
@@ -71,7 +73,7 @@ export function buildProject(
     name: meta.name,
     nodes: nodes.map(toProjectNode),
     edges: edges.map(toProjectEdge),
-    tags: [],
+    tags,
     alarms: [],
   };
 }
