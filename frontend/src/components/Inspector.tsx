@@ -18,8 +18,10 @@ export function Inspector() {
   const updateNodeData = useProjectStore((s) => s.updateNodeData);
   const setNodeParams = useProjectStore((s) => s.setNodeParams);
   const removeNode = useProjectStore((s) => s.removeNode);
-  // F3.2: tags en vivo del backend (snapshot REST) para el binding de widgets.
+  // F3.2/Rev 15: opciones de binding de widgets = tags en vivo del backend
+  // (snapshot REST) ∪ tags definidos en el proyecto (aunque aún no lleguen datos).
   const liveRows = useConnectionStore((s) => s.rows);
+  const projectTags = useProjectStore((s) => s.tags);
 
   if (!node || !selectedId) {
     return (
@@ -70,10 +72,17 @@ export function Inspector() {
       {Object.keys(params).length === 0 && <div className="inspector-empty">Sin parámetros.</div>}
       {Object.entries(params).map(([key, value]) => {
         const t = paramType(key, value);
-        // F3.2: binding de widget → select de tags en vivo (con fallback a texto).
+        // F3.2/Rev 15: binding de widget → select de tags (vivos ∪ del proyecto).
         if (kind === "widget" && key === "tag_id") {
           const current = typeof value === "string" ? value : "";
-          const known = liveRows.some((r) => r.id === current);
+          const liveIds = new Set(liveRows.map((r) => r.id));
+          const options = [
+            ...liveRows.map((r) => ({ id: r.id, label: `${r.name} (${r.id}) · en vivo` })),
+            ...projectTags
+              .filter((t) => !liveIds.has(t.id))
+              .map((t) => ({ id: t.id, label: `${t.name} (${t.id})` })),
+          ];
+          const known = options.some((o) => o.id === current);
           return (
             <label className="field" key={key}>
               <span>tag enlazado</span>
@@ -82,10 +91,10 @@ export function Inspector() {
                 onChange={(e) => setNodeParams(selectedId, { ...params, tag_id: e.target.value })}
               >
                 <option value="">— sin binding —</option>
-                {current && !known && <option value={current}>{current} (no en vivo)</option>}
-                {liveRows.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} ({r.id})
+                {current && !known && <option value={current}>{current} (desconocido)</option>}
+                {options.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
                   </option>
                 ))}
               </select>

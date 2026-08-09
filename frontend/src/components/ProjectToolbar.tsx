@@ -17,6 +17,7 @@ export function ProjectToolbar() {
   const token = useSessionStore((s) => s.token);
   const setProjectId = useSessionStore((s) => s.setProjectId);
   const fileRef = useRef<HTMLInputElement>(null);
+  const sendingRef = useRef(false); // Rev 15: guard síncrono anti doble-clic
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,6 +39,11 @@ export function ProjectToolbar() {
   }
 
   async function onSend() {
+    // Rev 15 (BLOCKER): el `disabled={busy}` se aplica en el próximo render; un
+    // doble-clic muy rápido podría colar dos POST. El ref bloquea la reentrada
+    // de forma síncrona → nunca se arrancan dos runtimes por doble-clic.
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setBusy(true);
     setErr(null);
     setMsg(null);
@@ -50,6 +56,7 @@ export function ProjectToolbar() {
     } catch (e) {
       setErr(e instanceof ApiError ? `backend: ${e.detail}` : e instanceof Error ? e.message : "error");
     } finally {
+      sendingRef.current = false;
       setBusy(false);
     }
   }

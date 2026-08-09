@@ -280,6 +280,24 @@ el backend.
 
 **F3.3 lista para merge — frontend 60 tests verdes · backend 82.**
 
+## Rev 15 — Revisión externa (Gemini + GLM) de F3.2 + F3.3 · 2026-08-09
+
+Revisión consolidada. Arquitectura base validada (helpers puros de widgets, integración
+de tags sin romper Rev 14, desacople del editor de Tags). Hallazgos:
+
+| # | Severidad | Archivo | Issue | Estado |
+|---|---|---|---|---|
+| 1 | **BLOCKER** | editor/projectIO.ts | Prototype pollution al importar (`{"__proto__":{…}}`). | ✅ `safeParseJSON` con reviver que descarta `__proto__`/`constructor`/`prototype`; tags reconstruidos campo a campo (sin claves extra). Test de no-contaminación. |
+| 2 | **BLOCKER** | components/ProjectToolbar.tsx | Doble-clic en "Enviar" → dos `POST /projects` (dos runtimes / WS antes de cargar). | ✅ Guard **síncrono** `sendingRef` (además del `disabled={busy}` que ya existía) → nunca reentra. |
+| 3 | **BLOCKER** | editor/projectIO.ts | Tags importados sin validar: `address` numérico o `data_type` inválido → 422 críptico del backend. | ✅ `validateTag`: `data_type` restringido a bool/int/float/string, `address` forzado a string, `id`/`driver_id` obligatorios; error claro en cliente. |
+| 4 | MEDIA | editor/widgets.tsx | Crash con `null` (quality bad). | ✅ **Ya cubierto**: `tankFillPct`/`valveState`/`fmt` guardan `null`/no-numérico. Verificado. |
+| 5 | MEDIA | editor/widgets.tsx | Rerenders masivos del `WidgetBody`. | ✅ **Ya mitigado por diseño**: el reducer `applyTagValues` conserva la referencia de los `TagState` no cambiados, y el selector Zustand es por `tags[tagId]` → sólo re-renderiza el widget cuyo tag cambió. |
+| 6 | BAJA | store/projectStore.ts | `tags` fuera del `partialize`. | ✅ **Ya incluido** en F3.3 (`partialize` lista `tags`). Verificado. |
+| 7 | BAJA | components/Inspector.tsx | Binding sin validar existencia. | ✅ Ya era un `<select>` (F3.2); **mejorado**: opciones = tags en vivo ∪ tags del proyecto (permite enlazar antes de conectar). |
+
+Aceptado sin reabrir: helpers puros, integración de tags respetando Rev 14, desacople de
+`TagsPanel`. **F3.2+F3.3 con Rev 15 — frontend 65 tests verdes · backend 82.**
+
 ## Cómo correr
 
 ```bash
