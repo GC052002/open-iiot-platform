@@ -23,6 +23,7 @@ from app.state import state
 from app.ws.protocol import (
     AckMsg,
     ClientMessageAdapter,
+    ErrorMsg,
     SubscribeMsg,
     TagUpdateMsg,
     UnsubscribeMsg,
@@ -92,6 +93,12 @@ async def ws_endpoint(ws: WebSocket) -> None:
         async for raw in ws.iter_text():
             msg = ClientMessageAdapter.validate_json(raw)
             if isinstance(msg, SubscribeMsg):
+                # Autorización por proyecto (Rev D1 §8.1.1): suscribirse exige `read`.
+                if not await _ws_authorized(client, msg.project_id, "read"):
+                    await ws.send_text(ErrorMsg(
+                        code="forbidden",
+                        detail=f"sin acceso al proyecto {msg.project_id!r}").model_dump_json())
+                    continue
                 state.manager.subscribe(client, msg.project_id, msg.tag_ids)
                 snap = state.tag_cache.snapshot(msg.project_id, msg.tag_ids)
                 if snap:
@@ -112,12 +119,20 @@ async def ws_endpoint(ws: WebSocket) -> None:
             await sender
 
 
-async def _handle_write(msg: WriteMsg, client) -> tuple[bool, str | None]:  # noqa: ANN001
-    # RBAC contra el rol cacheado del handshake (Rev 12) + audit log (§3.6).
-    from app.security.rbac import can
+async def _ws_authorized(client, project_id: str, perm: str) -> bool:  # noqa: ANN001
+    """Autorización por proyecto para el WS, con caché por sesión (Rev D1 §8.1.1)."""
+    from app.security.authz import project_can, project_role
 
-    if not can(client.role, "tag:write"):
-        return False, "permiso denegado: tag:write"
+    if project_id not in client.project_roles:
+        client.project_roles[project_id] = await project_role(
+            client.username, client.role, project_id, state.config_repo)
+    return project_can(client.project_roles[project_id], perm)
+
+
+async def _handle_write(msg: WriteMsg, client) -> tuple[bool, str | None]:  # noqa: ANN001
+    # Autorización por proyecto (Rev D1 §8.1.1): escribir setpoints exige `operate`.
+    if not await _ws_authorized(client, msg.project_id, "operate"):
+        return False, f"permiso de proyecto denegado: operate ({msg.project_id})"
 
     prev = state.tag_cache.get(msg.project_id, msg.tag_id)
     old_value = prev.value if prev else None

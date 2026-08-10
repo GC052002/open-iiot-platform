@@ -31,6 +31,13 @@ class Tag(BaseModel):
     data_type: Literal["bool", "int", "float", "string"] = "float"
     unit: str | None = Field(default=None, description="Unidad de ingeniería (opcional).")
 
+    # F4.2: si es `True`, el visor del cliente muestra un control de setpoint para este
+    # tag (la escritura se autoriza server-side con `operate`). Por defecto solo-lectura.
+    writable: bool = Field(
+        default=False,
+        description="El operador puede escribir este tag (setpoint) desde el visor.",
+    )
+
     # --- R4: deadband / report-by-exception ---
     deadband: float = Field(
         default=0.0,

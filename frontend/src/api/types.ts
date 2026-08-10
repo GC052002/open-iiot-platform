@@ -36,6 +36,8 @@ export interface Tag {
   unit?: string | null;
   deadband: number;
   deadband_mode: DeadbandMode;
+  /** F4.2: el operador puede escribir este tag (setpoint) desde el visor. */
+  writable?: boolean;
 }
 
 export interface XY {
@@ -104,6 +106,51 @@ export interface TagRow {
   name: string;
   value: unknown;
   quality: Quality;
+  unit?: string | null;
+  writable?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Identidad y multiusuario (F4.0/F4.1)
+// ---------------------------------------------------------------------------
+
+export type RoleGlobal = "admin" | "engineer" | "client" | "operator" | "viewer";
+export type RoleProj = "owner" | "editor" | "operator" | "viewer";
+
+/** Respuesta de `POST /login`. */
+export interface LoginResult {
+  token: string;
+  username: string;
+  role: RoleGlobal;
+}
+
+/** Usuario en la lista de administración (`GET /users`). */
+export interface UserInfo {
+  username: string;
+  role: RoleGlobal;
+  active: boolean;
+}
+
+/** Resumen de proyecto (`GET /projects`). */
+export interface ProjectSummary {
+  project_id: string;
+  name?: string;
+  owner?: string;
+  delivery_version?: number;
+  updated_at?: string;
+}
+
+/** Miembro de un proyecto (`GET /projects/{id}/members`). */
+export interface Member {
+  username: string;
+  role_proj: RoleProj;
+}
+
+/** Versión publicada (`GET /projects/{id}/versions`). */
+export interface VersionInfo {
+  project_id: string;
+  version: number;
+  published_at: string;
 }
 
 // ---------------------------------------------------------------------------

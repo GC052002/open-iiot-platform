@@ -20,8 +20,8 @@ export function LoginBar() {
     setBusy(true);
     setError(null);
     try {
-      const tok = await login(user, pass);
-      setSession(tok, user);
+      const res = await login(user, pass);
+      setSession(res.token, res.username, res.role);
       setPass("");
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : "error de login");

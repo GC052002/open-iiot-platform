@@ -8,14 +8,21 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { RoleGlobal } from "../api/types";
 
 interface SessionStore {
   token: string | null;
   username: string | null;
+  role: RoleGlobal | null;
   projectId: string;
-  setSession: (token: string, username: string) => void;
+  setSession: (token: string, username: string, role: RoleGlobal) => void;
   clearSession: () => void;
   setProjectId: (projectId: string) => void;
+}
+
+/** El operador/cliente entra en modo visor (solo-lectura); el resto, al editor. */
+export function isViewerRole(role: RoleGlobal | null): boolean {
+  return role === "client" || role === "operator" || role === "viewer";
 }
 
 export const useSessionStore = create<SessionStore>()(
@@ -23,9 +30,10 @@ export const useSessionStore = create<SessionStore>()(
     (set) => ({
       token: null,
       username: null,
+      role: null,
       projectId: "default",
-      setSession: (token, username) => set({ token, username }),
-      clearSession: () => set({ token: null, username: null }),
+      setSession: (token, username, role) => set({ token, username, role }),
+      clearSession: () => set({ token: null, username: null, role: null }),
       setProjectId: (projectId) => set({ projectId }),
     }),
     { name: "iiot.session" },

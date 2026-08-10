@@ -9,7 +9,18 @@
  * endpoints abiertos; con token, se envía `Authorization: Bearer <token>`.
  */
 
-import type { AlarmRule, Project, TagRow } from "./types";
+import type {
+  AlarmRule,
+  LoginResult,
+  Member,
+  Project,
+  ProjectSummary,
+  RoleGlobal,
+  RoleProj,
+  TagRow,
+  UserInfo,
+  VersionInfo,
+} from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -55,18 +66,98 @@ async function request<T>(
 // Endpoints
 // ---------------------------------------------------------------------------
 
-/** `POST /login` → token de sesión. `null` no aplica: lanza ApiError(401). */
-export async function login(username: string, password: string): Promise<string> {
-  const body = await request<{ token: string }>("/login", {
+/** `POST /login` → token + rol global. Lanza ApiError(401) si falla. */
+export function login(username: string, password: string): Promise<LoginResult> {
+  return request<LoginResult>("/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
-  return body.token;
 }
 
-/** `GET /projects` → ids de proyectos cargados en el runtime. */
-export function listProjects(token?: string | null): Promise<string[]> {
-  return request<string[]>("/projects", { token });
+/** `GET /projects` → proyectos visibles para el usuario (filtrado por membresía). */
+export function listProjects(token?: string | null): Promise<ProjectSummary[]> {
+  return request<ProjectSummary[]>("/projects", { token });
+}
+
+// -- Gestión de usuarios (admin, F4.0) --------------------------------------
+
+export function listUsers(token?: string | null): Promise<UserInfo[]> {
+  return request<UserInfo[]>("/users", { token });
+}
+
+export function createUser(
+  username: string,
+  password: string,
+  role: RoleGlobal,
+  token?: string | null,
+): Promise<UserInfo> {
+  return request<UserInfo>("/users", {
+    method: "POST",
+    body: JSON.stringify({ username, password, role }),
+    token,
+  });
+}
+
+export function setUserActive(
+  username: string,
+  active: boolean,
+  token?: string | null,
+): Promise<UserInfo> {
+  return request<UserInfo>(`/users/${encodeURIComponent(username)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ active }),
+    token,
+  });
+}
+
+export function deleteUser(username: string, token?: string | null): Promise<unknown> {
+  return request(`/users/${encodeURIComponent(username)}`, { method: "DELETE", token });
+}
+
+// -- Miembros de proyecto (F4.1) --------------------------------------------
+
+export function listMembers(projectId: string, token?: string | null): Promise<Member[]> {
+  return request<Member[]>(`/projects/${encodeURIComponent(projectId)}/members`, { token });
+}
+
+export function addMember(
+  projectId: string,
+  username: string,
+  roleProj: RoleProj,
+  token?: string | null,
+): Promise<Member> {
+  return request<Member>(`/projects/${encodeURIComponent(projectId)}/members`, {
+    method: "POST",
+    body: JSON.stringify({ username, role_proj: roleProj }),
+    token,
+  });
+}
+
+export function removeMember(
+  projectId: string,
+  username: string,
+  token?: string | null,
+): Promise<unknown> {
+  return request(
+    `/projects/${encodeURIComponent(projectId)}/members/${encodeURIComponent(username)}`,
+    { method: "DELETE", token },
+  );
+}
+
+// -- Publicación / versiones (F4.1b) ----------------------------------------
+
+export function publishProject(
+  projectId: string,
+  token?: string | null,
+): Promise<{ project_id: string; delivery_version: number }> {
+  return request(`/projects/${encodeURIComponent(projectId)}/publish`, {
+    method: "POST",
+    token,
+  });
+}
+
+export function listVersions(projectId: string, token?: string | null): Promise<VersionInfo[]> {
+  return request<VersionInfo[]>(`/projects/${encodeURIComponent(projectId)}/versions`, { token });
 }
 
 /** `GET /projects/{id}` → topología completa (para hidratar el canvas). */

@@ -45,6 +45,9 @@ class _Client:
     # Auth cacheada en el handshake (Rev 12): evita descifrar el token en cada escritura.
     role: str = "viewer"
     username: str = "anonymous"
+    # F4.1 (Rev D1 §8.1.1): rol EFECTIVO por proyecto, resuelto en el 1er acceso y
+    # cacheado en la sesión. None = sin acceso a ese proyecto.
+    project_roles: dict[str, str | None] = field(default_factory=dict)
 
 
 class ConnectionManager:
