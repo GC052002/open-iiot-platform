@@ -26,6 +26,7 @@ PONTE AL DÍA leyendo en la rama main, en este orden:
 4. ROADMAP.md         (fases; Fase 3 COMPLETA, empezamos Fase 4)
 5. REVIEW_TASKS.md    (historial de revisiones Rev 1–16 de Gemini/GLM)
 6. docs/PHASE4_DESIGN.md (DISEÑO CERRADO de la Fase 4 — leer §8 "Rev D1")
+7. docs/PHASE4_IMPL_PLAN.md (GUÍA DE EJECUCIÓN: 3 lotes, archivo/endpoint/test — SEGUIR)
 
 FLUJO DE TRABAJO:
 - Yo (Claude/Opus) implemento fase por fase, con tests verdes, y mergeo a main vía PR
@@ -43,6 +44,12 @@ credential_id, credenciales de PLC fuera del JSON) → F4.1b (publicación Plant
 como snapshot inmutable + versionado) → F4.2 (visor HMI responsive del cliente) → F4.3
 (reportes/consumo) → F4.4 (egress a terceros). Implementa por sub-fase con tests verdes
 y mergea a main vía PR. Python soportado 3.11–3.13 (NO 3.14, ver R7).
+
+EJECUCIÓN OPTIMIZADA (para gastar menos tokens sin bajar calidad): sigue
+docs/PHASE4_IMPL_PLAN.md — agrupa en 3 LOTES (A backend identidad/permisos/secretos/
+publicación · B frontend gestión+visor cliente · C reportes+egress), 1 PR por lote,
+verifica con tests (pytest/vitest) y deja UNA sola captura e2e al final del Lote B.
+Actualiza docs una vez por lote. Cada lote mergeado es coherente y revisable por sí solo.
 ```
 
 ## Estado actual (2026-08-09)
