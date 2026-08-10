@@ -15,11 +15,14 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-Role = Literal["admin", "engineer", "operator", "viewer"]
+# Roles globales (F4.0): admin (superusuario), engineer (crea proyectos),
+# client (opera su entrega). operator/viewer se conservan por compatibilidad.
+Role = Literal["admin", "engineer", "operator", "viewer", "client"]
 
-# permiso -> roles que lo tienen
+# permiso -> roles GLOBALES que lo tienen. La autorización fina por proyecto vive en
+# `security/authz.py` (F4.1); esto gobierna solo capacidades globales.
 PERMISSIONS: dict[str, set[str]] = {
-    "read": {"admin", "engineer", "operator", "viewer"},
+    "read": {"admin", "engineer", "operator", "viewer", "client"},
     "tag:write": {"admin", "engineer", "operator"},
     "project:write": {"admin", "engineer"},
     "audit:read": {"admin"},
@@ -50,6 +53,7 @@ class User(BaseModel):
     role: Role
     salt: str = ""
     password_hash: str = ""
+    active: bool = True
 
 
 class UserStore:

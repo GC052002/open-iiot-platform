@@ -52,7 +52,22 @@ verifica con tests (pytest/vitest) y deja UNA sola captura e2e al final del Lote
 Actualiza docs una vez por lote. Cada lote mergeado es coherente y revisable por sí solo.
 ```
 
-## Estado actual (2026-08-09)
+## Estado actual (2026-08-10) — Fase 4, Lote A COMPLETO
+
+- **Lote A de la Fase 4 implementado** (backend): **F4.0** (usuarios persistidos en BD +
+  API `/users`), **F4.1** (proyectos persistidos + `project_members` + **autorización
+  server-side por `project_id`** en REST y WS), **F4.1c** (secretos fuera del JSON:
+  `credential_id` + KEK Fernet + resolución de `{"$secret": ...}` en `start_project`) y
+  **F4.1b** (publicación Plantilla→Entrega: snapshot inmutable + `delivery_version`).
+- **BD de configuración separada** `iiot_config.db` (env `IIOT_CONFIG_DB`), patrón
+  Repository (`storage/config_repository.py` + `SQLiteConfigRepository`), mismo estilo WAL
+  que el historiador. Ver `REVIEW_TASKS.md` → «Fase 4 — Lote A».
+- **Tests: backend 134 verdes** (113→134, +21) · frontend 66 (sin cambios en Lote A).
+- **Siguiente:** **Lote B** (frontend: gestión de usuarios/proyectos + visor HMI del
+  cliente en modo Runtime + setpoints `writable` + export). Luego **Lote C** (reportes +
+  egress). Ver `docs/PHASE4_IMPL_PLAN.md`.
+
+## Estado anterior (2026-08-09)
 
 - **Fase 2 COMPLETA.** F0 ✅ · F1 ✅ · F2.0–F2.3 ✅ · monitor web ✅ · **F2.4** (alarmas +
   seguridad + observabilidad) ✅ — todo en `main`.

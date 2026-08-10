@@ -344,6 +344,31 @@ memoria/CPU ante código realmente no-confiable — **diferido a F4**; la allowl
 + timeout es defensa suficiente para el modelo actual (usuarios autenticados del propio
 sistema). **F3.4 con Rev 16 — backend 98→113 tests verdes.**
 
+## Fase 4 — Lote A: identidad, permisos por proyecto, secretos y publicación · 2026-08-10
+
+Backend de la Fase 4 (F4.0 + F4.1 + F4.1c + F4.1b), sin tocar el frontend. Sigue
+`docs/PHASE4_IMPL_PLAN.md` (Lote A) y `docs/PHASE4_DESIGN.md §8` (Rev D1).
+
+| Sub-fase | Entregable | Archivos |
+|---|---|---|
+| **F4.0** | Usuarios persistidos en BD (patrón Repository) + `DbUserStore` con caché y bootstrap + API admin `POST/GET/PATCH/DELETE /users`. | `storage/config_repository.py`, `storage/sqlite_config_repository.py`, `security/user_store.py`, `api/` |
+| **F4.1** | Proyectos **persistidos** + `project_members` (owner/editor/operator/viewer) + **autorización server-side por `project_id`** en REST (`require_project`/`authorize_project`) y WS (rol por proyecto cacheado en el handshake). `GET /projects` filtra por membresía; edición de topología ajena/`operator` rechazada. | `security/authz.py`, `api/`, `state.py`, `main.py`, `ws/manager.py` |
+| **F4.1c** | **Secretos fuera del JSON**: `credential_id` + KEK Fernet de instancia; `SecretStore.put/resolve`; los drivers resuelven `{"$secret": "<id>"}` en `start_project` (el persistido conserva la referencia). `POST /secrets` (gated). | `security/secrets.py`, `state.py`, `api/` |
+| **F4.1b** | **Publicación Plantilla→Entrega**: snapshot inmutable en `project_versions` + `delivery_version++` (sin hot-reload de topología). `POST /projects/{id}/publish`, `GET /projects/{id}/versions`. | `state.publish_project`, `api/`, `storage/` |
+
+Decisiones/notas:
+- **BD separada** `iiot_config.db` (env `IIOT_CONFIG_DB`), mismo estilo WAL + `to_thread`
+  + `asyncio.Lock` que el historiador. No mezcla series temporales con configuración.
+- **Compatibilidad**: en modo abierto/dev (sin `config_repo`) el admin anónimo se resuelve
+  como `owner` de cualquier proyecto; los 113 tests previos siguen verdes sin cambios.
+- **Roles globales** `admin/engineer/client` (rbac ampliado; `operator/viewer` conservados
+  por compatibilidad); **roles de proyecto** `owner>editor>operator>viewer` con permisos
+  `read/operate/edit/manage`.
+- **Tests: backend 113→134 (+21)** — CRUD de usuarios y bootstrap, matriz de permisos por
+  proyecto, **denegación de acceso cruzado** (engineer de A no edita B; operator no edita;
+  viewer no opera), persistencia/recarga de proyectos, publicación crea versión inmutable,
+  cifrado y resolución de `$secret` en runtime. `ruff` sin issues nuevos (E402/F401/I001).
+
 ## Cómo correr
 
 ```bash
