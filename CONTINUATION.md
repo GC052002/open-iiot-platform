@@ -15,15 +15,17 @@ ACCESO A GITHUB (importante): trabajamos sobre GC052002/open-iiot-platform.
   (o list_repos para verlo). Clónalo si hace falta.
 - Los cambios se hacen con git (push/pull van por el proxy de la sesión) y los PRs con
   las herramientas mcp__github__* (create_pull_request / merge_pull_request).
-- Rama de trabajo: claude/open-iiot-platform-64k96b. Se REINICIA desde main al empezar
-  cada bloque nuevo (git fetch origin main && git checkout -B <rama> origin/main).
+- Rama de trabajo: la que asigne la sesión (p. ej. claude/open-iiot-platform-XXXX).
+  Se REINICIA desde main al empezar cada bloque nuevo
+  (git fetch origin main && git checkout -B <rama> origin/main).
 
 PONTE AL DÍA leyendo en la rama main, en este orden:
 1. CONTINUATION.md   (este archivo: estado, siguiente paso, cómo correr)
 2. PROJECT_CONTEXT.md (visión: ingesta híbrida Modbus/MQTT/S7/OPC UA, multi-tenant)
 3. ARCHITECTURE.md    (decisiones de diseño; matriz de decisiones §9)
-4. ROADMAP.md         (fases; vamos a empezar F3)
-5. REVIEW_TASKS.md    (historial de revisiones Rev 1–13 de Gemini/GLM)
+4. ROADMAP.md         (fases; Fase 3 COMPLETA, empezamos Fase 4)
+5. REVIEW_TASKS.md    (historial de revisiones Rev 1–16 de Gemini/GLM)
+6. docs/PHASE4_DESIGN.md (DISEÑO CERRADO de la Fase 4 — leer §8 "Rev D1")
 
 FLUJO DE TRABAJO:
 - Yo (Claude/Opus) implemento fase por fase, con tests verdes, y mergeo a main vía PR
@@ -32,12 +34,18 @@ FLUJO DE TRABAJO:
   como "Rev N" antes de mergear (o después si ya mergeé un bloque autocontenido).
 - Prioridad: calidad + modularidad + tests, cuidando el presupuesto de tokens.
 
-ESTADO: Fase 2 COMPLETA (backend industrial). SIGUIENTE: F3 (frontend visual, canvas
-HMI tipo WinCC/Node-RED). Empieza por F3.0 (scaffold React + React Flow + conexión al
-backend), o propón primero un mini-diseño de F3 si lo ves necesario.
+ESTADO: Fase 3 COMPLETA (frontend visual funcional end-to-end) y probada en Windows.
+El DISEÑO de la Fase 4 está CERRADO (docs/PHASE4_DESIGN.md, con Rev D1 de GLM/Gemini
+integrada). SIGUIENTE: implementar Fase 4, empezando por F4.0 (usuarios persistidos en
+BD + API/UI de gestión de usuarios). Orden post-D1: F4.0 → F4.1 (proyectos persistidos
++ permisos por proyecto + middleware de autorización por project_id) → F4.1c (secretos:
+credential_id, credenciales de PLC fuera del JSON) → F4.1b (publicación Plantilla→Entrega
+como snapshot inmutable + versionado) → F4.2 (visor HMI responsive del cliente) → F4.3
+(reportes/consumo) → F4.4 (egress a terceros). Implementa por sub-fase con tests verdes
+y mergea a main vía PR. Python soportado 3.11–3.13 (NO 3.14, ver R7).
 ```
 
-## Estado actual (2026-08-02)
+## Estado actual (2026-08-09)
 
 - **Fase 2 COMPLETA.** F0 ✅ · F1 ✅ · F2.0–F2.3 ✅ · monitor web ✅ · **F2.4** (alarmas +
   seguridad + observabilidad) ✅ — todo en `main`.
@@ -56,21 +64,34 @@ backend), o propón primero un mini-diseño de F3 si lo ves necesario.
     JSON (round-trip probado) y botón **Enviar al backend** (`POST /projects` + conectar).
     Lazo diseño→datos en vivo cerrado y verificado e2e.
 - **Tests:** backend **113 verdes** (`pytest -q`) · frontend **66 verdes** (`npm test`).
-- **Revisiones integradas:** Rev 1–16 (Gemini + GLM) + R7. **Rev 16** endureció el sandbox del LogicNode (allowlist de AST, offload a thread+timeout, detección de ciclos).
-- **Siguiente:** **probar el sistema completo** en Windows (Python 3.13) end-to-end; luego
-  **Fase 4** (escalado: Redis, ABAC/Casbin, Vault, TimescaleDB, OTel) o **Fase 5**
-  (empaquetado/despliegue). Opcional futuro: `LogicNode` con **WASM** (Python real).
+- **Revisiones integradas:** Rev 1–16 (Gemini + GLM) + R7. **Rev 16** endureció el sandbox
+  del LogicNode (allowlist de AST, offload a thread+timeout, detección de ciclos).
+- **Probado end-to-end en Windows** (Python 3.13): diseñar → tags → LogicNode → widget en
+  vivo → enviar → export/import. **Rama 2 (IOT2050/MQTT) validada** (`tools/mqtt_demo/`:
+  broker + edge_sim). **Diseño de la Fase 4 CERRADO** (`docs/PHASE4_DESIGN.md` + Rev D1).
+- **Siguiente:** implementar **Fase 4** (plataforma multiusuario + entrega a cliente),
+  empezando por **F4.0** (usuarios persistidos + gestión de usuarios). Ver el orden
+  post-D1 en el prompt de arranque de arriba y en `docs/PHASE4_DESIGN.md §8.3`.
 
 ## Cómo acceder a GitHub (para el agente del chat nuevo)
 
-- Repo: `GC052002/open-iiot-platform`. Rama principal: `main`. Rama de trabajo:
-  `claude/open-iiot-platform-64k96b`.
+- Repo: `GC052002/open-iiot-platform`. Rama principal: `main`. Rama de trabajo: la que
+  asigne la sesión (reiniciada desde `main` cada bloque).
 - Si el repo no está en scope: usar `add_repo` (owner=GC052002, repo=open-iiot-platform)
   y clonar. `list_repos` lo lista si hace falta descubrirlo.
-- Commits/push con `git` (proxy de la sesión). PRs y merges con `mcp__github__*`.
+- Commits/push con `git` (proxy de la sesión). PRs y merges con `mcp__github__*`
+  (`create_pull_request` / `merge_pull_request`, owner=GC052002, repo=open-iiot-platform).
 - Regla de ramas: reiniciar la rama de trabajo desde `main` al empezar cada bloque
-  (`git fetch origin main && git checkout -B claude/open-iiot-platform-64k96b origin/main`),
-  implementar, `git push -u origin <rama>`, abrir PR a `main` y mergear.
+  (`git fetch origin main && git checkout -B <rama> origin/main`), implementar,
+  `git push -u origin <rama>`, abrir PR a `main` y mergear. Tras el merge, actualizar la
+  ref de la rama a main y pushear (evita el aviso de commits sin pushear).
+- **Enlaces GitHub (para pasar revisiones a GLM 5.2 / Gemini):**
+  - Repo: `https://github.com/GC052002/open-iiot-platform`
+  - Archivo en main: `https://github.com/GC052002/open-iiot-platform/blob/main/<ruta>`
+  - Árbol: `https://github.com/GC052002/open-iiot-platform/tree/main/<carpeta>`
+  - Diff de un PR: `https://github.com/GC052002/open-iiot-platform/pull/<N>/files`
+  - Diseño Fase 4: `.../blob/main/docs/PHASE4_DESIGN.md`
+  - GLM 5.2 abre enlaces de GitHub; a Gemini se le pasan los archivos/bundle descargados.
 
 ## Cómo correr / probar (Linux)
 
