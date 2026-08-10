@@ -153,3 +153,88 @@ orden que priorices.
 - Redis multi-worker (escala horizontal), Vault (rotación de secretos), Sparkplug B,
   tracing OpenTelemetry — quedan como **F4-infra** / Fase 5 según necesidad.
 - WASM para `LogicNode` (Python real) — aislamiento definitivo de cómputo no-confiable.
+
+---
+
+## 8. Revisión de diseño D1 (GLM + Gemini) — decisiones integradas · 2026-08-09
+
+El diseño se validó como correcto. Se integran **4 refinamientos** (obligatorios antes
+de implementar) y se **cierran las 7 preguntas** con estas decisiones:
+
+### 8.1 Refinamientos aceptados (BLOCKERS de diseño)
+
+1. **Autorización server-side estricta por `project_id` (no confiar en el frontend).**
+   - **Dependencia/middleware FastAPI** que extrae `project_id` (de path, query o body)
+     y verifica el rol del usuario para ESE proyecto **en cada endpoint**. Sin esto, un
+     `engineer` podría escribir en la entrega de otro cliente.
+   - **WS:** verificar en el **handshake** y **cachear** `project_id` permitido + rol en
+     la sesión del cliente (ya cacheamos rol en el handshake, Rev 12 — se extiende a
+     `project_id`). `subscribe`/`write` se validan contra esa caché.
+   - El frontend solo **oculta**; la autorización real es del backend.
+
+2. **Plantilla → Publicación → Entrega = snapshot INMUTABLE + versionado.**
+   - **Plantilla (Authoring):** editable, inestable, contra simuladores/PLCs de prueba.
+     Vive en el entorno del integrador.
+   - **Entrega (Delivery):** **instantánea inmutable y versionada** de la plantilla,
+     contra PLCs de producción. El operador solo interactúa con la Entrega.
+   - Actualizar = **"Publicar"** una nueva versión de la plantilla → **nueva instantánea**
+     (nueva `delivery_version`). **Sin hot-reload de topología en producción.**
+   - Migración al publicar: si cambia la topología, el `TagCache` del proyecto se
+     reinicia; **el histórico se conserva** (tags borrados → datos huérfanos pero
+     auditables). Campo `schema_version`/`delivery_version` gobierna la migración.
+
+3. **Gestión de secretos: credenciales de PLC FUERA del JSON.**
+   - El JSON (plantilla/entrega) **nunca** contiene contraseñas (S7/OPC UA/MQTT TLS).
+     Referencia un **`credential_id`** (p. ej. `vault://plc_planta_a` o
+     `secret://<id>`). El backend lo **resuelve en runtime** e inyecta en memoria.
+   - Almacén: **Fernet con una KEK por cliente/instancia** ahora (extiende `crypto.py`,
+     F2.4b); **Vault/SOPS** cuando se necesite rotación/centralización. Así el JSON de
+     entrega se puede loguear/compartir sin riesgo.
+
+4. **Air-gapped de verdad en la entrega.**
+   - El build de producción del frontend **vendoriza todo** (sin CDNs/fuentes externas);
+     el **backend sirve los estáticos**; **cero llamadas a APIs externas** desde el
+     código del cliente. (Vite ya produce bundle autocontenido; se formaliza como regla
+     y se verifica en Fase 5.)
+
+### 8.2 Respuestas cerradas a las 7 preguntas
+
+1. **Acceso multi-proyecto:** tabla de unión `user_project_roles(user_id, project_id,
+   role)` (= nuestro `project_members`). `project_id` = **tenant id**; Runtime/TagCache
+   ya aislados por proyecto (F2.0). ✅
+2. **Plantilla vs Entrega:** Plantilla = editable/pruebas; Entrega = inmutable/versionada/
+   producción, creada por un "commit" (publicación) de la plantilla. ✅ (ver 8.1.2)
+3. **¿El operador necesita cuenta?** Sí, **mínima**: login atado a **un `project_id` de
+   entrega** con rol `operator`; entra **directo a su entrega** (no ve lista de proyectos).
+   Air-gapped: posible auth pasiva por IP/certificado de máquina.
+4. **Evitar que el operador edite la topología:** frontend con **dos modos** —
+   *Authoring* (paleta+inspector) vs *Runtime* (canvas solo-lectura, inspector muestra
+   valores en vivo). **La seguridad real en el backend:** `POST /projects`/edición
+   **rechaza** que un `operator` cambie topología.
+5. **Credenciales de PLC:** referencia `credential_id`, resuelta en runtime (ver 8.1.3).
+6. **Métricas y alarmas:** `/metrics` Prometheus = **global de infraestructura** (no por
+   proyecto); **alarmas aisladas por `project_id`** (ya, F2.4a); **notificadores por
+   proyecto**, no globales.
+7. **Versionado de entregas:** publicar nueva versión → migración de estado; topología
+   nueva → reset del TagCache del proyecto; **histórico conservado** (tags borrados →
+   huérfanos pero auditables); `delivery_version` gobierna la migración.
+
+### 8.3 Ajuste de sub-fases (tras D1)
+
+- **F4.0** — Usuarios persistidos + `/users` + UI admin. *(sin cambios)*
+- **F4.1** — Proyectos **persistidos** + `user_project_roles` + **middleware de
+  autorización por `project_id`** (REST+WS). Incluye el rechazo server-side de edición
+  por `operator`.
+- **F4.1b (nuevo)** — **Publicación Plantilla→Entrega**: snapshot inmutable +
+  `delivery_version` + migración (reset TagCache, histórico conservado).
+- **F4.2** — Visor del cliente: **modo Runtime** (solo-lectura) + setpoints `writable` +
+  export. *(el modo Authoring/Runtime se decide por rol)*
+- **F4.1c (nuevo, seguridad)** — **`credential_id` + KEK Fernet por instancia**: sacar
+  las credenciales del JSON. *Prerrequisito para cualquier entrega real.*
+- **F4.3** Reportes · **F4.4** Egress (config por proyecto; notificadores por proyecto).
+
+**Orden recomendado (post-D1):** F4.0 → F4.1 (+middleware) → **F4.1c (secretos)** →
+F4.1b (publicación) → F4.2 → F4.3/F4.4. La autorización estricta y la gestión de
+secretos son **prerrequisitos** de una entrega comercial.
+
+**Diseño CERRADO para implementar.**
