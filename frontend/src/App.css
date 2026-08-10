@@ -337,3 +337,73 @@ button.danger { color: #f85149; }
 .tagdef-row2 select { width: auto; }
 .tagdef-driver { color: var(--muted); font-size: 11px; }
 .tag-add { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line); }
+
+/* =========================================================================
+   F4.2 — Gestión (usuarios/proyectos) y visor HMI del cliente
+   ========================================================================= */
+
+.mode-link {
+  color: var(--accent, #58a6ff); text-decoration: none; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px;
+}
+.mode-link:hover { text-decoration: underline; }
+
+/* --- Panel de usuarios (admin) --- */
+.users-panel, .projects-panel { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.users-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.users-table th, .users-table td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+.users-table .user-inactive td { color: var(--muted); }
+.users-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.user-add, .member-add { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px dashed var(--line); }
+
+/* --- Gestor de proyectos --- */
+.projects-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.projects-list li { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 6px; }
+.projects-list li.sel { background: #0d1117; outline: 1px solid var(--line); }
+.proj-name { flex: 1; text-align: left; background: none; border: none; color: inherit; cursor: pointer; font-size: 13px; }
+.proj-ver { color: var(--good); font-size: 11px; margin-left: 6px; }
+.proj-actions { display: flex; gap: 4px; }
+.members-box { border-top: 1px dashed var(--line); padding-top: 8px; }
+.members-list { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.members-list li { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+.member-add { flex-direction: row; align-items: center; border-top: none; padding-top: 0; }
+.member-add input { flex: 1; }
+
+/* --- Visor HMI del cliente (responsive, mobile-first) --- */
+.viewer-route { flex: 1; overflow-y: auto; }
+.viewer { padding: 12px 16px; display: flex; flex-direction: column; gap: 14px; }
+.viewer-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.viewer-header h2 { margin: 0; font-size: 18px; }
+.viewer-picker { padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.viewer-msg { padding: 8px 0; }
+.conn-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); }
+.conn-connected { color: var(--good); }
+.conn-idle, .conn-reconnecting { color: var(--muted); }
+
+/* Rejilla adaptable: 1 columna en móvil, N según ancho. */
+.viewer-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+.viewer-card {
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+  background: var(--panel); display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.viewer-card-title { font-size: 12px; color: var(--muted); align-self: flex-start; }
+
+/* Setpoints */
+.viewer-setpoints { border-top: 1px solid var(--line); padding-top: 10px; }
+.viewer-setpoints h3 { font-size: 14px; margin: 0 0 8px; }
+.setpoint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 5px 0; }
+.setpoint-name { min-width: 120px; font-size: 13px; }
+.setpoint-current { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 48px; }
+.setpoint input { width: 100px; }
+.setpoint button.on { color: var(--good); border-color: var(--good); }
+.setpoint button.off { color: var(--muted); }
+.tagdef-writable { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.tagdef-writable input { width: auto; }
+
+@media (max-width: 600px) {
+  .viewer-grid { grid-template-columns: 1fr; }
+  .setpoint-name { min-width: 90px; }
+}

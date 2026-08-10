@@ -79,6 +79,15 @@ export function TagsPanel() {
               ))}
             </select>
           </div>
+          <label className="tagdef-writable">
+            <input
+              type="checkbox"
+              aria-label={`writable ${t.id}`}
+              checked={!!t.writable}
+              onChange={(e) => updateTag(t.id, { writable: e.target.checked })}
+            />
+            setpoint (escribible por el operador)
+          </label>
           <div className="tagdef-driver">driver: {t.driver_id}</div>
         </div>
       ))}

@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, authHeaders, listTags, login } from "./rest";
+import {
+  ApiError,
+  addMember,
+  authHeaders,
+  createUser,
+  listProjects,
+  listTags,
+  login,
+  publishProject,
+} from "./rest";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -25,9 +34,13 @@ function mockFetch(status: number, body: unknown) {
 }
 
 describe("login", () => {
-  it("devuelve el token del backend", async () => {
-    mockFetch(200, { token: "abc" });
-    await expect(login("u", "p")).resolves.toBe("abc");
+  it("devuelve token, usuario y rol del backend", async () => {
+    mockFetch(200, { token: "abc", username: "u", role: "engineer" });
+    await expect(login("u", "p")).resolves.toEqual({
+      token: "abc",
+      username: "u",
+      role: "engineer",
+    });
   });
 
   it("lanza ApiError con el detalle en fallo", async () => {
@@ -37,6 +50,46 @@ describe("login", () => {
       status: 401,
       detail: "credenciales inválidas",
     });
+  });
+});
+
+describe("endpoints F4 (identidad/proyectos)", () => {
+  it("listProjects hace GET /projects con el token", async () => {
+    const spy = mockFetch(200, [{ project_id: "P", name: "P" }]);
+    await expect(listProjects("tok")).resolves.toEqual([{ project_id: "P", name: "P" }]);
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe("/projects");
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer tok");
+  });
+
+  it("createUser hace POST /users con el cuerpo correcto", async () => {
+    const spy = mockFetch(200, { username: "cli", role: "client", active: true });
+    await createUser("cli", "pw", "client", "tok");
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe("/users");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(init?.body as string)).toEqual({
+      username: "cli",
+      password: "pw",
+      role: "client",
+    });
+  });
+
+  it("addMember codifica el project_id y envía role_proj", async () => {
+    const spy = mockFetch(200, { username: "u", role_proj: "viewer" });
+    await addMember("planta a", "u", "viewer", "tok");
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe("/projects/planta%20a/members");
+    expect(JSON.parse(init?.body as string)).toEqual({ username: "u", role_proj: "viewer" });
+  });
+
+  it("publishProject hace POST /projects/{id}/publish", async () => {
+    const spy = mockFetch(200, { project_id: "P", delivery_version: 3 });
+    await expect(publishProject("P", "tok")).resolves.toEqual({
+      project_id: "P",
+      delivery_version: 3,
+    });
+    expect(spy.mock.calls[0][0]).toBe("/projects/P/publish");
   });
 });
 

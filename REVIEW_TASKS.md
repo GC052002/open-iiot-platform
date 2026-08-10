@@ -369,6 +369,28 @@ Decisiones/notas:
   viewer no opera), persistencia/recarga de proyectos, publicación crea versión inmutable,
   cifrado y resolución de `$secret` en runtime. `ruff` sin issues nuevos (E402/F401/I001).
 
+## Fase 4 — Lote B: gestión de usuarios/proyectos + visor HMI del cliente · 2026-08-10
+
+Frontend de la Fase 4 (F4.0-UI + F4.1-UI + F4.2), sobre el Lote A. Sigue
+`docs/PHASE4_IMPL_PLAN.md` (Lote B).
+
+| Parte | Entregable | Archivos |
+|---|---|---|
+| **B1** | Login real que devuelve `role_global`; sesión persiste `token`+`role`. Enrutado por rol: `admin/engineer` → editor; `client/operator/viewer` → **visor** (modo Runtime). Forzable por hash `#/edit`/`#/view`. | `api/rest.ts` (`login`→`{token,username,role}`), `store/sessionStore.ts`, `components/LoginBar.tsx`, `App.tsx` |
+| **B2** | **Gestión de usuarios** (solo admin): crear/listar/activar/desactivar/borrar (`/users`). | `components/UsersPanel.tsx` |
+| **B3** | **Gestor de proyectos**: listar (filtrado por backend), **abrir** en el editor (`GET /projects/{id}` → `loadGraph`), gestionar **miembros** (`/members`), **Publicar** (`/publish`). | `components/ProjectsPanel.tsx` |
+| **B4** | **Visor HMI del cliente** responsive (modo Runtime solo-lectura): rejilla adaptable de widgets en vivo, **setpoints** para tags `writable` (control → `connection.write`, gated `operate` en backend), **export CSV** del snapshot. | `views/Viewer.tsx`, `views/ViewerRoute.tsx` |
+
+Enablers backend (mínimos): `Tag.writable` (bool), `/tags` expone `writable`+`unit`,
+`/login` devuelve `role`. Editor de Tags con checkbox **setpoint** (`writable`).
+
+- **Tests: frontend 66→77 (+11)** — endpoints REST F4 (login con rol, listProjects,
+  createUser, addMember, publish), `UsersPanel` (lista + crear), `ProjectsPanel` (listar +
+  publicar + abrir→loadGraph), `Viewer` (conexión en vivo, solo-lectura, setpoint dispara
+  `write`, `toCsv`). Backend 134 (sin regresión). `tsc` + `vite build` limpios.
+- **Pendiente (no bloqueante):** 1 captura e2e Playwright (login→gestor→editor→publicar→
+  visor→setpoint) — diferida; la cobertura de componentes + build valida el flujo.
+
 ## Cómo correr
 
 ```bash

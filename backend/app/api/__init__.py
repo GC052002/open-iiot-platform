@@ -27,11 +27,15 @@ router = APIRouter()
 # -- Autenticación -----------------------------------------------------------
 @router.post("/login")
 async def do_login(body: dict[str, str]) -> dict[str, str]:
-    token = login(body.get("username", ""), body.get("password", ""))
+    username = body.get("username", "")
+    token = login(username, body.get("password", ""))
     if token is None:
         raise HTTPException(status_code=401, detail="credenciales inválidas")
-    await state.audit("login", username=body.get("username"))
-    return {"token": token}
+    await state.audit("login", username=username)
+    # Rol global en la respuesta (F4.2): el frontend decide el modo (editor vs visor).
+    from app.security import context
+    data = context.cipher.verify_token(token) or {}
+    return {"token": token, "username": username, "role": data.get("role", "viewer")}
 
 
 # -- Gestión de usuarios (admin, F4.0) ---------------------------------------
@@ -259,7 +263,8 @@ async def list_tags(project_id: str = "default",
     out: list[dict[str, Any]] = []
     for tag in runtime.project.tags:
         value = snap.get(tag.id)
-        out.append({"id": tag.id, "name": tag.name,
+        out.append({"id": tag.id, "name": tag.name, "unit": tag.unit,
+                    "writable": tag.writable,
                     "value": value.value if value else None,
                     "quality": value.quality if value else "bad"})
     return out
