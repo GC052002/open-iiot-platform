@@ -156,16 +156,18 @@ multi-tenant). Cada sub-fase se cierra verde antes de la siguiente.
 - **Ejecución:** implementa Opus (el contrato WS↔canvas ya está fijado en F1);
   revisan GLM/Gemini. `[dep: F1]` (puede solaparse con F2)
 
-### Fase 4 — Escalado, multi-tenant y hardening (cloud-native) · *~4–5 j*
-Solo cuando se necesite el modo cloud-native. **Diferible.**
-- [ ] `ws/broker.py` — RedisBridge (pub/sub entre workers) + `topics.py`
-- [ ] RBAC + **ABAC** con Casbin (multi-planta) + JWT en handshake WS
-- [ ] Vault para secretos + rotación de clave Fernet
-- [ ] `entry_points` en `DriverRegistry.discover()` (plugins externos)
-- [ ] Tracing OpenTelemetry
-- [ ] Sparkplug B (implementación Protobuf) si el flag se activa
-- **Ejecución:** implementa Opus (Redis/Casbin/seguridad son críticos);
-  revisan GLM/Gemini. `[dep: F2, F3]`
+### Fase 4 — Plataforma multiusuario y entrega a cliente · *~6–8 j* (sub-fases)
+Reorientada a las necesidades de producto (ver **`docs/PHASE4_DESIGN.md`** — diseño en
+revisión por GLM/Gemini). Concreta el multi-tenant/ABAC previsto en §10.2.
+- **F4.0** — Usuarios persistidos (BD) + API de gestión (`/users`) + UI de admin
+- **F4.1** — Proyectos persistidos + **propiedad y miembros por proyecto** (owner/editor/
+  operator/viewer); permisos aplicados en API y WS (ABAC ligero, tabla propia)
+- **F4.2** — **Visor HMI del cliente** (responsive/móvil) + setpoints `writable` + export
+- **F4.3** — **Reportes**: registros mensuales y consumo + export CSV
+- **F4.4** — **Egress a terceros** (HTTP/MQTT/CSV, ≤1s; patrón `QueuedNotifier`)
+- **F4-infra (diferido)** — RedisBridge multi-worker, Casbin (si crece), Vault,
+  `entry_points` de drivers, OpenTelemetry, Sparkplug B
+- **Ejecución:** cerrar diseño (doc) → revisar → implementar por sub-fase. `[dep: F2, F3]`
 
 ### Fase 5 — Empaquetado y despliegue · *~2 j*
 - [ ] `docker-compose.yml` completo por modo (air-gapped / híbrido / cloud)
